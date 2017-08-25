@@ -128,7 +128,7 @@ class Snake(Game):
         Mark the game as finished if there is a collision
         Output: reward.
         """
-        reward = 0
+        reward = 1
         # Do nothing if the snake is moving in the opposite direction
         if action == 1 and self.snake_dir != 3:
             self.snake_dir = 1
@@ -145,7 +145,7 @@ class Snake(Game):
             self.snake_dir == 3 and self.head_pos[0] == self.grid_height - 1 or
             self.snake_dir == 4 and self.head_pos[1] == 0):            
                 self.gameover = True
-                reward = -0.1 # punish the player
+                reward = 0 # punish the player
         else:
             # remove head 
             self.set_tile(self.head_pos, 0)
@@ -186,10 +186,10 @@ class Snake(Game):
 class Player():
     
     def __init__(self, game):
-        self.epsilon = 0.005
+        self.epsilon = 0.05
         self.discount_rate = 0.9
-        self.max_mem = 300
-        self.batch_size = 50
+        self.max_mem = 500
+        self.batch_size = 60
         self.memory = [] 
         self.game = game
         self.build_model()
@@ -200,12 +200,14 @@ class Player():
         hidden_size = 100
         
         self.model = Sequential()
-        self.model.add(Dense(hidden_size, activation="relu", 
+        self.model.add(Dense(hidden_size, activation="tanh", 
                              input_shape=self.input_shape))
-        self.model.add(Dense(hidden_size, activation='relu'))
+        self.model.add(Dense(hidden_size, activation='tanh'))
+        self.model.add(Dense(hidden_size, activation='tanh'))
         self.model.add(Dense(len(game.get_actions())))
         
-        self.model.compile(sgd(lr=.2), "mse") 
+#        self.model.compile(sgd(lr=.2), "mse")
+        self.model.compile("adam", "mse") 
         
     def shape_grid(self, grid):
         """
@@ -307,7 +309,7 @@ if __name__ == "__main__":
     # Training
     
 #    print("Training")
-    epochs = 100
+    epochs = 500
     longest_run = 0
     high_score = 0
     for epoch in range(0, epochs):
@@ -359,6 +361,7 @@ def test(player, game):
                 
         print("Test {}/{}: \t {} turns. \t Score {}.".format(
                 epoch, epochs, length, score))
+        score -= length +1
         longest_run = max(longest_run, length)
         high_score = max(high_score, score)
         
