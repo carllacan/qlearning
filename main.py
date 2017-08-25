@@ -90,7 +90,7 @@ class Game:
 class Snake(Game):
     
     def __init__(self):
-        Game.__init__(self, 10, 10)
+        Game.__init__(self, 8, 8)
         # initialize the snake's direction
 #        self.snake_dir = 0 
         self.snake_dir = random.randint(1,4)
@@ -135,7 +135,7 @@ class Snake(Game):
             self.snake_dir == 3 and self.head_pos[0] == self.grid_height - 1 or
             self.snake_dir == 4 and self.head_pos[1] == 0):            
                 self.gameover = True
-                reward = -1 # punish the player
+                reward = -0.1 # punish the player
         else:
             # remove head 
             self.set_tile(self.head_pos, 0)
@@ -157,7 +157,7 @@ class Snake(Game):
             if self.fruit_pos == self.head_pos:
                 self.fruit_pos = self.get_free_cell() # reposition fruit
                 self.set_tile(self.fruit_pos, 2) # paint fruit
-                reward = 5 # reward the player
+                reward = 25 # reward the player
             
         return reward
                 
@@ -176,24 +176,22 @@ class Snake(Game):
 class Player():
     
     def __init__(self, game):
-        self.epsilon = 0.01
-        self.discount_rate = 0.95
-        self.max_mem = 500
+        self.epsilon = 0.005
+        self.discount_rate = 0.9
+        self.max_mem = 300
         self.batch_size = 50
         self.memory = [] 
         self.game = game
-        self.padding = 1
         self.build_model()
         
     def build_model(self):
         # Build deep neural network
         self.input_shape = (self.game.grid_size,)
-        hidden_size = 100
+        hidden_size = 60
         
         self.model = Sequential()
         self.model.add(Dense(hidden_size, activation="tanh", 
                              input_shape=self.input_shape))
-        self.model.add(Dense(hidden_size, activation='tanh'))
         self.model.add(Dense(hidden_size, activation='tanh'))
         self.model.add(Dense(len(game.get_actions())))
         self.model.compile(sgd(lr=.2), "mse") 
@@ -201,21 +199,22 @@ class Player():
     def build_model(self):
         # Build Convolutional neural network
         
-        self.input_shape = (self.game.grid_width + 2*self.padding,
-                            self.game.grid_height + 2*self.padding, 1)
-        hidden_size = 80
-        fshape = (3, 3)
-        fnum = (self.game.grid_height + self.padding - fshape[0] + 1 
-                )*(self.game.grid_width + self.padding - fshape[1] + 1)
+        self.input_shape = (*self.game.grid_shape, 1)
+        hidden_size = 100
+        fshape = (2, 2)
+        fnum = (self.game.grid_height - fshape[0] + 1 
+                )*(self.game.grid_width - fshape[1] + 1)
         
         self.model = Sequential()
-        self.model.add(Conv2D(fnum, fshape, activation="tanh", 
+        self.model.add(Conv2D(fnum, fshape, activation="relu", 
                              input_shape=self.input_shape))
         self.model.add(MaxPooling2D(pool_size=(2,2)))
         self.model.add(Dropout(0.25))
         self.model.add(Flatten())
-        self.model.add(Dense(hidden_size, activation='tanh'))
+        self.model.add(Dense(hidden_size, activation='relu'))
+        self.model.add(Dense(hidden_size, activation='relu'))
         self.model.add(Dropout(0.25))
+        self.model.add(Dense(hidden_size, activation='relu'))
         self.model.add(Dense(len(game.get_actions())))
         self.model.compile(sgd(lr=.2), "mse")
         
@@ -223,8 +222,7 @@ class Player():
         """
         Shapes a grid into an appropriate form for the model
         """
-        return np.pad(grid, self.padding, 
-                      'constant', constant_values=3).reshape(self.input_shape)
+        return grid.reshape(self.input_shape)
     
     def forwardpass(self, model_input):
         """
