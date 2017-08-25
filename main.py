@@ -208,7 +208,7 @@ class Catch(Game):
         
         self.lose_r = 0
         self.survive_r = 1
-        self.win_r = 5
+        self.win_r = 50
         
     def draw_player(self, tile = 1):
         for i in range(self.player_width):
@@ -492,10 +492,10 @@ def main():
 
 if __name__ == "__main__":
     VERBOSE_TRAIN = True
-    MAX_EPSILON = 0.05
+    MAX_EPSILON = 0.5
     MAX_DISCOUNT = 0.9
-    BATCH_SIZE = 25
+    BATCH_SIZE = 10
     HIDDEN_SIZE = 100
-    LEARNING_RATE = 0.2
-    EPOCHS = 200
+    LEARNING_RATE = 0.15
+    EPOCHS = 500
     main()

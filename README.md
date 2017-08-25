@@ -5,7 +5,7 @@ An environment is created that simulates a game . This environment takes actions
 
 A player with a neural-network provides actions and learns from the environment responses using Q-learning per advantage learning.
 
-The network should learn what actions provide the best value. So far it has had mild success... in the best run the player has managed to survive for around 5 turns consistently.
+The network should learn what actions provide the best value. So far it has had mild success... in the bests experiments the player has managed to survive at snake for more than 20 turns consistently, but scoring less than 3 points.
 
 ## Techniques used
 
