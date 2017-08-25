@@ -90,9 +90,10 @@ class Game:
 class Snake(Game):
     
     def __init__(self):
-        Game.__init__(self, 5, 5)
+        Game.__init__(self, 10, 10)
         # initialize the snake's direction
-        self.snake_dir = 0 
+#        self.snake_dir = 0 
+        self.snake_dir = random.randint(1,4)
         # initialize head and fruit (so that get_free_cell() works)
         self.head_pos =  [-1, -1]
         self.fruit_pos =  [-1, -1]
@@ -181,6 +182,7 @@ class Player():
         self.batch_size = 50
         self.memory = [] 
         self.game = game
+        self.padding = 1
         self.build_model()
         
     def build_model(self):
@@ -195,12 +197,33 @@ class Player():
         self.model.add(Dense(hidden_size, activation='tanh'))
         self.model.add(Dense(len(game.get_actions())))
         self.model.compile(sgd(lr=.2), "mse") 
-
+        
+    def build_model(self):
+        # Build Convolutional neural network
+        self.input_shape = (self.game.grid_width + 2*self.padding,
+                            self.game.grid_height + 2*self.padding, 1)
+        hidden_size = 80
+        fshape = (2, 2)
+        fnum = (self.game.grid_height + self.padding - fshape[0] + 1 
+                )*(self.game.grid_width + self.padding - fshape[1] + 1)
+        
+        self.model = Sequential()
+        self.model.add(Conv2D(fnum, fshape, activation="tanh", 
+                             input_shape=self.input_shape))
+        self.model.add(MaxPooling2D(pool_size=(2,2)))
+        self.model.add(Dropout(0.25))
+        self.model.add(Flatten())
+        self.model.add(Dense(hidden_size, activation='tanh'))
+        self.model.add(Dropout(0.25))
+        self.model.add(Dense(len(game.get_actions())))
+        self.model.compile(sgd(lr=.2), "mse")
+        
     def shape_grid(self, grid):
         """
         Shapes a grid into an appropriate form for the model
         """
-        return grid.reshape(self.input_shape)
+        return np.pad(grid, self.padding, 
+                      'constant', constant_values=3).reshape(self.input_shape)
     
     def forwardpass(self, model_input):
         """
@@ -281,6 +304,8 @@ if __name__ == "__main__":
             r = game.transition(a)
             sf = game.get_grid() 
             
+#            game.draw_screen()
+            
             player.memorize(s, a, r, sf, game.gameover)
             loss = player.train()
             
@@ -313,7 +338,6 @@ def test(player, game):
             s = game.get_grid() # get state at the start of the epoch
             a = player.get_action(s, exploration=False)
             r = game.transition(a)
-            
             length += 1
             score += r
                 
