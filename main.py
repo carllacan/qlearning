@@ -193,11 +193,14 @@ class Snake(Game):
 class Catch(Game):
     
     def __init__(self):
-        Game.__init__(self, 3, 3)
-        self.player_pos = [self.grid_height - 1, self.grid_width // 2]
+        Game.__init__(self, 10, 10)
+        self.player_width = 3
+        
+        self.player_pos = self.grid_width // 2 - self.player_width // 2
         self.fruit_pos = [0, self.grid_width // 2]#random.randint(0, self.grid_width-1)]
             
-        self.grid[tuple(self.player_pos)] = 1
+        
+        self.draw_player()
         self.grid[tuple(self.fruit_pos)] = 1
         
         self.extra_info = 0
@@ -206,39 +209,45 @@ class Catch(Game):
         self.survive_r = 0
         self.win_r = 1
         
+    def draw_player(self, tile = 1):
+        for i in range(self.player_width):
+            self.grid[self.grid_height - 1, self.player_pos + i] = tile
+            
     def get_actions(self):
         return [0, 1, 2] # left, stay, right
     
     def tile_symbols(self, tile):
-        return ("   ", "[:]", " * ")[tile]
+        return (" ", "#", "*")[tile]
     
     def transition(self, action):
         reward = self.survive_r
         # Erase player and fruit from the grid
-        self.grid[tuple(self.player_pos)] = 0
+        self.draw_player(0)
         self.grid[tuple(self.fruit_pos)] = 0
         
         # Update fruit
         self.fruit_pos[0] += 1
         
         # Update player
-        if action == 0 and self.player_pos[1] != 0:
-            self.player_pos[1] -= 1
-        if action == 2 and self.player_pos[1] != self.grid_width-1:
-            self.player_pos[1] += 1
+        if action == 0 and self.player_pos != 0:
+            self.player_pos -= 1
+        if action == 2 and self.player_pos != self.grid_width - self.player_width:
+            self.player_pos += 1
             
-        # Did it catch the fruit?
-        if self.fruit_pos == self.player_pos:
-            self.fruit_pos = [0, random.randint(0, self.grid_width-1)]
-            reward = self.win_r
-        
-        # Did the fruit get off the grid?
+        # Did the fruit get to the last row?
         if self.fruit_pos[0] == self.grid_height-1:
-            self.fruit_pos = [0, random.randint(0, self.grid_width-1)]
-            reward = self.lose_r
-            self.gameover = True
             
-        self.grid[tuple(self.player_pos)] = 1
+            # Did it catch the fruit?
+            if (self.player_pos <= self.fruit_pos[1] and 
+                self.fruit_pos[1] <= self.player_pos + self.player_width - 1):
+                reward = self.win_r
+            else:
+                reward = self.lose_r
+                self.gameover = True
+            # Replace fruit
+            self.fruit_pos = [0, random.randint(0, self.grid_width-1)]
+            
+        self.draw_player()
         self.grid[tuple(self.fruit_pos)] = 1
         
         return reward
@@ -249,7 +258,7 @@ class Player():
         self.epsilon = 0.1
         self.discount_rate = 0.9
         self.max_mem = 500
-        self.batch_size = 100
+        self.batch_size = 50
         self.memory = [] 
         self.game = game
         self.build_model()
@@ -262,12 +271,11 @@ class Player():
         
         self.model = Sequential()
         self.model.add(Dense(hidden_size, activation="relu", 
-                             input_shape=self.input_shape,
-                             kernel_initializer='random_uniform',
-                             bias_initializer='random_uniform'))
+                             input_shape=self.input_shape))
+#                             kernel_initializer='random_uniform',
+#                             bias_initializer='random_uniform'))
         self.model.add(Dense(hidden_size, activation='relu'))
-        self.model.add(Dense(len(game.get_actions()),  activation='relu',
-                             kernel_initializer='random_uniform',))
+        self.model.add(Dense(len(game.get_actions())))
         
         self.model.compile(sgd(lr=.2), "mse")
         
@@ -316,7 +324,7 @@ class Player():
         
     def get_action(self, state, exploration=True):
         
-        if np.random.rand() < self.epsilon and exploration:
+        if random.random() < self.epsilon and exploration:
             action = random.choice(self.game.get_actions())
         else:
             Q = self.forwardpass(self.shape_grid(self.game.get_state()))[0]
@@ -358,28 +366,27 @@ class Player():
                 # an approximation of future rewards
                 Q = self.forwardpass(state_tp1)[0]
                 targets[i][action_t] = reward_t + self.discount_rate*max(Q)
-                
         return self.model.train_on_batch(inputs, targets)
                 
 if __name__ == "__main__":
     
 #     Uncomment this to play manually
-    game = Catch()
-    while not game.gameover:
-        game.draw_screen()
-        print("Choose action:", end="")
-        a = input()
-        r = game.transition(int(a))
-        print("Reward:", r)
-        print("")
-                
+#    game = Catch()
+#    while not game.gameover:
+#        game.draw_screen()
+#        print("Choose action:", end="")
+#        a = input()
+#        r = game.transition(int(a))
+#        print("Reward:", r)
+#        print("")
+#                
     game = Catch()
     player = Player(game)
                 
     # Training
     
 #    print("Training")
-    epochs = 200
+    epochs = 250
     longest_run = 0
     high_score = 0
     for epoch in range(0, epochs):
@@ -430,7 +437,7 @@ def test(player, game):
             score += 1 if r == game.win_r  else 0
                 
         print("Test {}/{}: \t {} turns. \t Score {}.".format(
-                epoch, epochs, length, score))
+                test, tests, length, score))
         longest_run = max(longest_run, length)
         high_score = max(high_score, score)
         
