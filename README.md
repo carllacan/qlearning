@@ -10,6 +10,7 @@ The network should learn what actions provide the best value. So far it has had 
 ## Techniques used
 
 * Advantage learning, particularized to Q-learning.
+* Double Q-learning
 * (Prioritized) memory replay
 * Progressive discount rate growth
 * Progressive exploration rate growth

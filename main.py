@@ -260,7 +260,7 @@ class Player():
         self.epsilon = 0.0
         self.epsilon_growth = (self.max_epsilon - self.epsilon)/200 #/epoch
         
-        self.max_discount = 0.9
+        self.max_discount = 0.5
         self.discount = 0.0
         self.discount_growth = (self.max_discount - self.discount)/10 #/epoch
         
@@ -279,7 +279,7 @@ class Player():
     def build_model(self):
         # Build deep neural network
         self.input_shape = (self.game.grid_size + self.game.extra_info,)
-        hidden_size = 100 #self.game.grid_size
+        hidden_size = 120 #self.game.grid_size
         
         model = Sequential()
         model.add(Dense(hidden_size, activation="relu", 
@@ -287,12 +287,11 @@ class Player():
                              kernel_initializer='random_uniform',
                              bias_initializer='random_uniform'))
         model.add(Dense(hidden_size, activation='relu'))
-        model.add(Dense(hidden_size//2, activation='relu'))
 #        self.model.add(Dropout(0.25))
         model.add(Dense(len(game.get_actions())))
         
 #        self.model.compile("adam", "mse")
-        model.compile(sgd(lr=.15), "mse")
+        model.compile(sgd(lr=.2), "mse")
         
         return model
         
