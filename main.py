@@ -17,6 +17,7 @@ from keras.layers import Flatten
 from keras.layers import Dropout
 from keras.constraints import maxnorm
 from keras.optimizers import sgd
+import keras.initializers
 
 class Game:
     
@@ -108,6 +109,10 @@ class Snake(Game):
         
         self.extra_info = 1
         
+        self.lose_r = -1
+        self.survive_r = 0
+        self.win_r = 5
+        
     def get_state(self):
         """
         Returns the grid AND the direction of the snake.
@@ -128,7 +133,7 @@ class Snake(Game):
         Mark the game as finished if there is a collision
         Output: reward.
         """
-        reward = 1
+        reward = self.survive_r
         # Do nothing if the snake is moving in the opposite direction
         if action == 1 and self.snake_dir != 3:
             self.snake_dir = 1
@@ -145,7 +150,7 @@ class Snake(Game):
             self.snake_dir == 3 and self.head_pos[0] == self.grid_height - 1 or
             self.snake_dir == 4 and self.head_pos[1] == 0):            
                 self.gameover = True
-                reward = 0 # punish the player
+                reward = self.lose_r # punish the player
         else:
             # remove head 
             self.set_tile(self.head_pos, 0)
@@ -167,7 +172,7 @@ class Snake(Game):
             if self.fruit_pos == self.head_pos:
                 self.fruit_pos = self.get_free_cell() # reposition fruit
                 self.set_tile(self.fruit_pos, 2) # paint fruit
-                reward = 25 # reward the player
+                reward = self.win_r # reward the player
             
         return reward
                 
@@ -194,6 +199,7 @@ class Player():
         self.game = game
         self.build_model()
         
+        
     def build_model(self):
         # Build deep neural network
         self.input_shape = (self.game.grid_size + self.game.extra_info,)
@@ -201,10 +207,12 @@ class Player():
         
         self.model = Sequential()
         self.model.add(Dense(hidden_size, activation="tanh", 
-                             input_shape=self.input_shape))
+                             input_shape=self.input_shape,
+                             kernel_initializer=keras.initializers.Ones(),
+                             bias_initializer='zeros'))
         self.model.add(Dense(hidden_size, activation='tanh'))
-        self.model.add(Dense(hidden_size, activation='tanh'))
-        self.model.add(Dense(len(game.get_actions())))
+        self.model.add(Dense(hidden_size, activation='relu'))
+        self.model.add(Dense(len(game.get_actions()),  activation='relu'))
         
 #        self.model.compile(sgd(lr=.2), "mse")
         self.model.compile("adam", "mse") 
@@ -309,7 +317,7 @@ if __name__ == "__main__":
     # Training
     
 #    print("Training")
-    epochs = 500
+    epochs = 200
     longest_run = 0
     high_score = 0
     for epoch in range(0, epochs):
@@ -328,7 +336,7 @@ if __name__ == "__main__":
             loss = player.train()
             
             length += 1
-            score += r
+            score += 1 if r == game.win_r else 0
 #        print(length, score, loss)
         print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
                 epoch, epochs, length, score, loss))
@@ -357,11 +365,10 @@ def test(player, game):
             a = player.get_action(s, exploration=False)
             r = game.transition(a)
             length += 1
-            score += r
+            score += 1 if r == game.win_r  else 0
                 
         print("Test {}/{}: \t {} turns. \t Score {}.".format(
                 epoch, epochs, length, score))
-        score -= length +1
         longest_run = max(longest_run, length)
         high_score = max(high_score, score)
         
