@@ -200,10 +200,11 @@ class Player():
         
     def build_model(self):
         # Build Convolutional neural network
+        
         self.input_shape = (self.game.grid_width + 2*self.padding,
                             self.game.grid_height + 2*self.padding, 1)
         hidden_size = 80
-        fshape = (2, 2)
+        fshape = (3, 3)
         fnum = (self.game.grid_height + self.padding - fshape[0] + 1 
                 )*(self.game.grid_width + self.padding - fshape[1] + 1)
         
