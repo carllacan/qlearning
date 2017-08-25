@@ -111,13 +111,14 @@ class Snake(Game):
         
         self.lose_r = -1
         self.survive_r = 0
-        self.win_r = 5
+        self.win_r = 1
         
     def get_state(self):
         """
         Returns the grid AND the direction of the snake.
         """
         return np.append(self.snake_dir, self.grid)
+#        return self.grid
     
     def get_actions(self):
         return [0, 1, 2, 3, 4] # keep going, move up, right, down, left
@@ -188,13 +189,67 @@ class Snake(Game):
                     free_cells.append([y, x])
         return random.choice(free_cells)
     
+    
+class Catch(Game):
+    
+    def __init__(self):
+        Game.__init__(self, 3, 3)
+        self.player_pos = [self.grid_height - 1, self.grid_width // 2]
+        self.fruit_pos = [0, self.grid_width // 2]#random.randint(0, self.grid_width-1)]
+            
+        self.grid[tuple(self.player_pos)] = 1
+        self.grid[tuple(self.fruit_pos)] = 1
+        
+        self.extra_info = 0
+        
+        self.lose_r = -1
+        self.survive_r = 0
+        self.win_r = 1
+        
+    def get_actions(self):
+        return [0, 1, 2] # left, stay, right
+    
+    def tile_symbols(self, tile):
+        return ("   ", "[:]", " * ")[tile]
+    
+    def transition(self, action):
+        reward = self.survive_r
+        # Erase player and fruit from the grid
+        self.grid[tuple(self.player_pos)] = 0
+        self.grid[tuple(self.fruit_pos)] = 0
+        
+        # Update fruit
+        self.fruit_pos[0] += 1
+        
+        # Update player
+        if action == 0 and self.player_pos[1] != 0:
+            self.player_pos[1] -= 1
+        if action == 2 and self.player_pos[1] != self.grid_width-1:
+            self.player_pos[1] += 1
+            
+        # Did it catch the fruit?
+        if self.fruit_pos == self.player_pos:
+            self.fruit_pos = [0, random.randint(0, self.grid_width-1)]
+            reward = self.win_r
+        
+        # Did the fruit get off the grid?
+        if self.fruit_pos[0] == self.grid_height-1:
+            self.fruit_pos = [0, random.randint(0, self.grid_width-1)]
+            reward = self.lose_r
+            self.gameover = True
+            
+        self.grid[tuple(self.player_pos)] = 1
+        self.grid[tuple(self.fruit_pos)] = 1
+        
+        return reward
+    
 class Player():
     
     def __init__(self, game):
-        self.epsilon = 0.05
+        self.epsilon = 0.1
         self.discount_rate = 0.9
         self.max_mem = 500
-        self.batch_size = 60
+        self.batch_size = 100
         self.memory = [] 
         self.game = game
         self.build_model()
@@ -206,16 +261,15 @@ class Player():
         hidden_size = 100
         
         self.model = Sequential()
-        self.model.add(Dense(hidden_size, activation="tanh", 
+        self.model.add(Dense(hidden_size, activation="relu", 
                              input_shape=self.input_shape,
-                             kernel_initializer=keras.initializers.Ones(),
-                             bias_initializer='zeros'))
-        self.model.add(Dense(hidden_size, activation='tanh'))
+                             kernel_initializer='random_uniform',
+                             bias_initializer='random_uniform'))
         self.model.add(Dense(hidden_size, activation='relu'))
-        self.model.add(Dense(len(game.get_actions()),  activation='relu'))
+        self.model.add(Dense(len(game.get_actions()),  activation='relu',
+                             kernel_initializer='random_uniform',))
         
-#        self.model.compile(sgd(lr=.2), "mse")
-        self.model.compile("adam", "mse") 
+        self.model.compile(sgd(lr=.2), "mse")
         
     def shape_grid(self, grid):
         """
@@ -262,7 +316,7 @@ class Player():
         
     def get_action(self, state, exploration=True):
         
-        if random.random() < player.epsilon and exploration:
+        if np.random.rand() < self.epsilon and exploration:
             action = random.choice(self.game.get_actions())
         else:
             Q = self.forwardpass(self.shape_grid(self.game.get_state()))[0]
@@ -279,39 +333,47 @@ class Player():
 
         n = min(len(self.memory), self.batch_size)
         sample = random.sample(self.memory, n)
-            
         inputs = np.zeros((n, *(self.input_shape)))
         targets = np.zeros((n, len(self.game.get_actions())))
         
-        for i, entry in enumerate(sample):
-            inputs[i] = entry[2]
-            # compute the target, i.e. the total future reward
+        for i, experience in enumerate(sample):
+            state_t = experience[0]
+            action_t = experience[1]
+            reward_t = experience[2]
+            state_tp1 = experience[3]
+            gameover = experience[4]
             
-            if entry[4]: # if this action resulted in the end of the game
-                t = entry[2] # its future reward is just its reward
-            else:
-                Q = self.forwardpass(entry[3])[0]
-                t = entry[2] + self.discount_rate*max(Q)
-                
+            # make the input vector
+            inputs[i] = state_t
+            
             # make the target vector
-            tvector = self.forwardpass(entry[0])[0]
-            tvector[entry[1]] = t
-            targets[i] = tvector
+            targets[i] = self.forwardpass(state_t)[0]
+            
+            if gameover: 
+                # if this action resulted in the end of the game
+                # its future reward is just its reward
+                targets[i][action_t] = reward_t 
+            else:
+                # else its future reward is its reward plus the 
+                # an approximation of future rewards
+                Q = self.forwardpass(state_tp1)[0]
+                targets[i][action_t] = reward_t + self.discount_rate*max(Q)
+                
         return self.model.train_on_batch(inputs, targets)
                 
 if __name__ == "__main__":
     
-    # Uncomment this to play manually
-#    game = Snake()
-#    while not game.gameover:
-#        game.draw_screen()
-#        print("Choose action:", end="")
-#        a = input()
-#        r = game.transition(int(a))
-#        print("Reward:", r)
-#        print("")
+#     Uncomment this to play manually
+    game = Catch()
+    while not game.gameover:
+        game.draw_screen()
+        print("Choose action:", end="")
+        a = input()
+        r = game.transition(int(a))
+        print("Reward:", r)
+        print("")
                 
-    game = Snake()
+    game = Catch()
     player = Player(game)
                 
     # Training
