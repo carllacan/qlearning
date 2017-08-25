@@ -257,17 +257,17 @@ class Player():
     
     def __init__(self, game):
         self.epsilon = 0.05
-        self.discount_rate = 0.9
-        self.kdt = 5 # for advantage learning
-        self.max_mem = 500
-        self.batch_size = 30
+        self.discount_rate = 0.7
+        self.kdt = 3 # for advantage learning
+        self.max_mem = 200
+        self.batch_size = 50
         self.memory = [] 
         self.game = game
         self.build_model()
         
         # the discount will grow as the player learns
         self.discount = 0.2
-        self.discount_speed = (self.discount_rate - self.discount)/1000
+        self.discount_speed = (self.discount_rate - self.discount)/3000
         
         
     def build_model(self):
@@ -277,11 +277,11 @@ class Player():
         
         self.model = Sequential()
         self.model.add(Dense(hidden_size, activation="relu", 
-                             input_shape=self.input_shape))
-#                             kernel_initializer='random_uniform',
-#                             bias_initializer='random_uniform'))
+                             input_shape=self.input_shape,
+                             kernel_initializer='zeros',
+                             bias_initializer='random_uniform'))
         self.model.add(Dense(hidden_size, activation='relu'))
-        self.model.add(Dropout(0.25))
+#        self.model.add(Dropout(0.25))
         self.model.add(Dense(len(game.get_actions())))
         
         self.model.compile(sgd(lr=.01), "mse")
@@ -339,10 +339,14 @@ class Player():
         return action
             
     def memorize(self, state, action, reward, state_final, gameover):
-        self.memory.append((self.shape_grid(state), action, reward, 
-                            self.shape_grid(state_final), gameover))
-        if len(self.memory) > self.max_mem:
-            self.memory.pop(0)
+        experience = (self.shape_grid(state), action, reward, 
+                            self.shape_grid(state_final), gameover)
+        # Prioritized Experience Replay
+        importance = 1 if reward == 0 else 5
+        for i in range(importance):
+            self.memory.append(experience)
+            if len(self.memory) > self.max_mem:
+                self.memory.pop(0)
         
     def train(self):   
 
