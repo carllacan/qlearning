@@ -93,7 +93,7 @@ class Game:
 class Snake(Game):
     
     def __init__(self):
-        Game.__init__(self, 5, 5)
+        Game.__init__(self, 8, 8)
         # initialize the snake's direction
 #        self.snake_dir = 0 
         self.snake_dir = random.randint(1,4)
@@ -109,9 +109,9 @@ class Snake(Game):
         
         self.extra_info = 0
         
-        self.lose_r = -5
+        self.lose_r = -1
         self.survive_r = 0
-        self.win_r = 50
+        self.win_r = 1
         
     def get_state(self):
         """
@@ -256,18 +256,28 @@ class Catch(Game):
 class Player():
     
     def __init__(self, game):
-        self.max_epsilon = 0.1
+        # Exploration rate (aka epsilon): determines the probability that the
+        # player will take a random action. This avoids the dilemma between
+        # exploration and exploitation (should I keep choosing safe actions
+        # or do I try to maximize my scores?)
+        self.max_epsilon = MAX_EPSILON # 0.1
         self.epsilon = 0.0
-        self.epsilon_growth = (self.max_epsilon - self.epsilon)/200 #/epoch
+        self.epsilon_growth = (self.max_epsilon - self.epsilon)/500 #/epoch
         
-        self.max_discount = 0.5
+        # Discount rate: determines how much future rewards are taken into
+        # account when training. Zero will make the player myopic (prefer
+        # short-term rewards) and one will take the future rewards for
+        # exact values (so unless deterministic game make discount < 1)
+        self.max_discount = MAX_DISCOUNT #0.9
         self.discount = 0.0
-        self.discount_growth = (self.max_discount - self.discount)/10 #/epoch
+        self.discount_growth = (self.max_discount - self.discount)/500 #/epoch
         
-        self.kdt = 1 # for advantage learning
+        # Advantage learning parameter. It is actually k/dt, with dt being
+        # the steptime of a frame. Not sure how to set it.
+        self.kdt = 1
         
         self.max_mem = 500
-        self.batch_size = 25
+        self.batch_size = BATCH_SIZE #30
         
         self.memory = [] 
         self.game = game
@@ -279,7 +289,7 @@ class Player():
     def build_model(self):
         # Build deep neural network
         self.input_shape = (self.game.grid_size + self.game.extra_info,)
-        hidden_size = 120 #self.game.grid_size
+        hidden_size = HIDDEN_SIZE
         
         model = Sequential()
         model.add(Dense(hidden_size, activation="relu", 
@@ -291,40 +301,36 @@ class Player():
         model.add(Dense(len(game.get_actions())))
         
 #        self.model.compile("adam", "mse")
-        model.compile(sgd(lr=.2), "mse")
+        model.compile(sgd(lr=LEARNING_RATE), "mse")
         
         return model
-        
-    def shape_grid(self, state):
-        """
-        Shapes a grid into an appropriate form for the model
-        """
-        return state.reshape(self.input_shape)
-    
+            
+    # Another model with convolutional layers. Comment or uncomment at need.
 #    def build_model(self):
-#        # Build Convolutional neural network
 #        
 #        self.input_shape = (*self.game.grid_shape, 1)
 #        hidden_size = 100
 #        fshape = (2, 2)
 #        fnum = (self.game.grid_height - fshape[0] + 1 
 #                )*(self.game.grid_width - fshape[1] + 1)
-#        
-#        self.model = Sequential()
-#        self.model.add(Conv2D(fnum, fshape, activation="relu", 
+#        fnum = 32
+#        model = Sequential()
+#        model.add(Conv2D(fnum, fshape, activation="relu", 
 #                             input_shape=self.input_shape))
-#        self.model.add(MaxPooling2D(pool_size=(2,2)))
-#        self.model.add(Dropout(0.25))
-#        self.model.add(Flatten())
-#        self.model.add(Dense(hidden_size, activation='relu'))
-#        self.model.add(Dense(len(game.get_actions())))
-#        self.model.compile(sgd(lr=.2), "mse")
+##        model.add(MaxPooling2D(pool_size=(2,2)))
+#        model.add(Dropout(0.25))
+#        model.add(Flatten())
+#        model.add(Dense(hidden_size, activation='relu'))
+#        model.add(Dense(len(game.get_actions())))
+#        model.compile(sgd(lr=.2), "mse")
 #        
-#    def shape_grid(self, state):
-#        """
-#        Shapes a grid into an appropriate form for the model
-#        """
-#        return state.reshape(self.input_shape)
+#        return model
+        
+    def shape_grid(self, state):
+        """
+        Shapes a grid into an appropriate form for the model
+        """
+        return state.reshape(self.input_shape)
     
     def forwardpass(self, model_input, secondary_model = False):
         """
@@ -344,7 +350,7 @@ class Player():
             Q = self.forwardpass(self.shape_grid(self.game.get_state()))[0]
 #            action = max(self.game.get_actions(), key=lambda a: Q[a])
             maxQ = max(Q)
-            A = maxQ + (Q - maxQ)*self.kdt # ?
+            A = maxQ + (Q - maxQ)*self.kdt 
             action = max(self.game.get_actions(), key=lambda a: A[a])
         return action
             
@@ -399,9 +405,41 @@ class Player():
         # Update secondary network weights to those of the primary
         self.model2.set_weights(self.model.get_weights())
         return self.model.train_on_batch(inputs, targets)
-                
-if __name__ == "__main__":
     
+def test(player, game):
+        # Testing
+    print("\n=== Testing ===\n")
+    tests = 100         
+    longest_run = 0
+    high_score = 0   
+    total_run = 0
+    total_score = 0
+    for test in range(0, tests):
+        game.reset()
+        length = 0
+        score = 0
+        while not game.gameover and length < 250:
+            s = game.get_state() # get state at the start of the epoch
+            a = player.get_action(s, exploration=False)
+            r = game.transition(a)
+            length += 1
+            score += 1 if r == game.win_r  else 0
+                
+#        print("Test {}/{}: \t {} turns. \t Score {}.".format(
+#                test, tests, length, score))
+        longest_run = max(longest_run, length)
+        high_score = max(high_score, score)
+        
+        total_run += length
+        total_score += score
+                    
+    print("Longest run:", longest_run)
+    print("Highest score:", high_score)
+    print("Average run:", total_run/tests)
+    print("Average score:", total_score/tests)    
+    
+
+def main():
 #     Uncomment this to play manually
 #    game = Catch()
 #    while not game.gameover:
@@ -412,16 +450,13 @@ if __name__ == "__main__":
 #        print("Reward:", r)
 #        print("")
 #                
-    game = Catch()
+    game = Snake()
     player = Player(game)
-                
-#    print("Initial Q-values")
-#    print(player.forwardpass(player.shape_grid(game.get_state())))
-    
+                    
     # Training
     print("\n=== Training ===\n")
     
-    epochs = 100
+    epochs = EPOCHS
     longest_run = 0
     high_score = 0
     for epoch in range(0, epochs):
@@ -442,7 +477,8 @@ if __name__ == "__main__":
             length += 1
             score += 1 if r == game.win_r else 0
 #        print(length, score, loss)
-        print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
+        if VERBOSE_TRAIN:
+            print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
                 epoch, epochs, length, score, loss))
         longest_run = max(longest_run, length)
         high_score = max(high_score, score)
@@ -451,38 +487,15 @@ if __name__ == "__main__":
     print("Longest run:", longest_run)
     print("Highest score:", high_score)
     
-    # Testing
-    print("\n=== Testing ===\n")
-    def test(player, game):
-        print("Testing")    
-        tests = 100         
-        longest_run = 0
-        high_score = 0   
-        total_run = 0
-        total_score = 0
-        for test in range(0, tests):
-            game.reset()
-            length = 0
-            score = 0
-            while not game.gameover and length < 250:
-                s = game.get_state() # get state at the start of the epoch
-                a = player.get_action(s, exploration=False)
-                r = game.transition(a)
-                length += 1
-                score += 1 if r == game.win_r  else 0
-                    
-    #        print("Test {}/{}: \t {} turns. \t Score {}.".format(
-    #                test, tests, length, score))
-            longest_run = max(longest_run, length)
-            high_score = max(high_score, score)
-            
-            total_run += length
-            total_score += score
-                        
-        print("Longest run:", longest_run)
-        print("Highest score:", high_score)
-        print("Average run:", total_run/tests)
-        print("Average score:", total_score/tests)
-                
     test(player, game)
         
+
+if __name__ == "__main__":
+    VERBOSE_TRAIN = True
+    MAX_EPSILON = 0.05
+    MAX_DISCOUNT = 0.9
+    BATCH_SIZE = 25
+    HIDDEN_SIZE = 100
+    LEARNING_RATE = 0.2
+    EPOCHS = 200
+    main()
