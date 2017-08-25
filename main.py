@@ -33,6 +33,8 @@ class Game:
         self.grid = np.zeros(self.grid_shape)
         self.gameover = False
         
+        self.extra_info = 0
+        
     def transition(self, action):
         """
         Inputs: action
@@ -42,7 +44,7 @@ class Game:
         """
         return 0 # return reward
     
-    def get_grid(self):
+    def get_state(self):
         """
         Returns the grid.
         """
@@ -90,7 +92,7 @@ class Game:
 class Snake(Game):
     
     def __init__(self):
-        Game.__init__(self, 8, 8)
+        Game.__init__(self, 5, 5)
         # initialize the snake's direction
 #        self.snake_dir = 0 
         self.snake_dir = random.randint(1,4)
@@ -104,6 +106,14 @@ class Snake(Game):
         self.set_tile(self.head_pos, 1) # paint the head
         self.set_tile(self.fruit_pos, 2) # paint the head
         
+        self.extra_info = 1
+        
+    def get_state(self):
+        """
+        Returns the grid AND the direction of the snake.
+        """
+        return np.append(self.snake_dir, self.grid)
+    
     def get_actions(self):
         return [0, 1, 2, 3, 4] # keep going, move up, right, down, left
     
@@ -169,8 +179,8 @@ class Snake(Game):
         free_cells = []
         for y in range(0, self.grid_height):
             for x in range(0, self.grid_width):
-                if [x, y] != self.head_pos and [x, y] != self.fruit_pos:
-                    free_cells.append([x, y])
+                if [y, x] != self.head_pos and [x, y] != self.fruit_pos:
+                    free_cells.append([y, x])
         return random.choice(free_cells)
     
 class Player():
@@ -186,43 +196,50 @@ class Player():
         
     def build_model(self):
         # Build deep neural network
-        self.input_shape = (self.game.grid_size,)
-        hidden_size = 60
-        
-        self.model = Sequential()
-        self.model.add(Dense(hidden_size, activation="tanh", 
-                             input_shape=self.input_shape))
-        self.model.add(Dense(hidden_size, activation='tanh'))
-        self.model.add(Dense(len(game.get_actions())))
-        self.model.compile(sgd(lr=.2), "mse") 
-        
-    def build_model(self):
-        # Build Convolutional neural network
-        
-        self.input_shape = (*self.game.grid_shape, 1)
+        self.input_shape = (self.game.grid_size + self.game.extra_info,)
         hidden_size = 100
-        fshape = (2, 2)
-        fnum = (self.game.grid_height - fshape[0] + 1 
-                )*(self.game.grid_width - fshape[1] + 1)
         
         self.model = Sequential()
-        self.model.add(Conv2D(fnum, fshape, activation="relu", 
+        self.model.add(Dense(hidden_size, activation="relu", 
                              input_shape=self.input_shape))
-        self.model.add(MaxPooling2D(pool_size=(2,2)))
-        self.model.add(Dropout(0.25))
-        self.model.add(Flatten())
-        self.model.add(Dense(hidden_size, activation='relu'))
-        self.model.add(Dense(hidden_size, activation='relu'))
-        self.model.add(Dropout(0.25))
         self.model.add(Dense(hidden_size, activation='relu'))
         self.model.add(Dense(len(game.get_actions())))
-        self.model.compile(sgd(lr=.2), "mse")
+        
+        self.model.compile(sgd(lr=.2), "mse") 
         
     def shape_grid(self, grid):
         """
         Shapes a grid into an appropriate form for the model
         """
         return grid.reshape(self.input_shape)
+    
+#    def build_model(self):
+#        # Build Convolutional neural network
+#        
+#        self.input_shape = (*self.game.grid_shape, 1)
+#        hidden_size = 100
+#        fshape = (2, 2)
+#        fnum = (self.game.grid_height - fshape[0] + 1 
+#                )*(self.game.grid_width - fshape[1] + 1)
+#        
+#        self.model = Sequential()
+#        self.model.add(Conv2D(fnum, fshape, activation="relu", 
+#                             input_shape=self.input_shape))
+##        self.model.add(MaxPooling2D(pool_size=(2,2)))
+#        self.model.add(Dropout(0.25))
+#        self.model.add(Flatten())
+#        self.model.add(Dense(hidden_size, activation='relu'))
+##        self.model.add(Dense(hidden_size, activation='relu'))
+#        self.model.add(Dropout(0.25))
+#        self.model.add(Dense(hidden_size, activation='relu'))
+#        self.model.add(Dense(len(game.get_actions())))
+#        self.model.compile(sgd(lr=.2), "mse")
+        
+#    def shape_grid(self, state):
+#        """
+#        Shapes a grid into an appropriate form for the model
+#        """
+#        return state[1].reshape(self.input_shape)
     
     def forwardpass(self, model_input):
         """
@@ -238,7 +255,7 @@ class Player():
         if random.random() < player.epsilon and exploration:
             action = random.choice(self.game.get_actions())
         else:
-            Q = self.forwardpass(self.shape_grid(self.game.get_grid()))[0]
+            Q = self.forwardpass(self.shape_grid(self.game.get_state()))[0]
             action = max(self.game.get_actions(), key=lambda a: Q[a])
         return action
             
@@ -298,10 +315,10 @@ if __name__ == "__main__":
         length = 0
         score = 0 # compensate for the final -1
         while not game.gameover and length < 50:
-            s = game.get_grid() 
+            s = game.get_state() 
             a = player.get_action(s)
             r = game.transition(a)
-            sf = game.get_grid() 
+            sf = game.get_state() 
             
 #            game.draw_screen()
             
@@ -334,7 +351,7 @@ def test(player, game):
         length = 0
         score = 0
         while not game.gameover and length < 250:
-            s = game.get_grid() # get state at the start of the epoch
+            s = game.get_state() # get state at the start of the epoch
             a = player.get_action(s, exploration=False)
             r = game.transition(a)
             length += 1
