@@ -9,6 +9,15 @@ Created on Fri Aug 25 12:13:04 2017
 import numpy as np
 import random
 
+from keras.models import Sequential
+from keras.layers.core import Dense
+from keras.layers.convolutional import Convolution2D as Conv2D
+from keras.layers import MaxPooling2D
+from keras.layers import Flatten
+from keras.layers import Dropout
+from keras.constraints import maxnorm
+from keras.optimizers import sgd
+
 class Game:
     
     def __init__(self, grid_height, grid_width):
@@ -19,8 +28,9 @@ class Game:
         """
         self.grid_height = grid_height
         self.grid_width = grid_width
+        self.grid_shape = self.grid_height, self.grid_width
         self.grid_size = grid_height*grid_width
-        self.grid = np.zeros((self.grid_height, self.grid_width))
+        self.grid = np.zeros(self.grid_shape)
         self.gameover = False
         
     def transition(self, action):
@@ -32,14 +42,11 @@ class Game:
         """
         return 0 # return reward
     
-    def get_screen(self):
+    def get_grid(self):
         """
-        Return the grid. If the game is over return None.
+        Returns the grid.
         """
-        if self.gameover:
-            return None
-        else:
-            return self.grid.reshape(1, self.grid_width*self.grid_width)
+        return self.grid
 
     def get_actions(self):
         """
@@ -83,7 +90,7 @@ class Game:
 class Snake(Game):
     
     def __init__(self):
-        Game.__init__(self, 8, 8)
+        Game.__init__(self, 5, 5)
         # initialize the snake's direction
         self.snake_dir = 0 
         # initialize head and fruit (so that get_free_cell() works)
@@ -165,13 +172,163 @@ class Snake(Game):
                     free_cells.append([x, y])
         return random.choice(free_cells)
     
+class Player():
+    
+    def __init__(self, game):
+        self.epsilon = 0.01
+        self.discount_rate = 0.95
+        self.max_mem = 500
+        self.batch_size = 50
+        self.memory = [] 
+        self.game = game
+        self.build_model()
+        
+    def build_model(self):
+        # Build deep neural network
+        self.input_shape = (self.game.grid_size,)
+        hidden_size = 100
+        
+        self.model = Sequential()
+        self.model.add(Dense(hidden_size, activation="tanh", 
+                             input_shape=self.input_shape))
+        self.model.add(Dense(hidden_size, activation='tanh'))
+        self.model.add(Dense(hidden_size, activation='tanh'))
+        self.model.add(Dense(len(game.get_actions())))
+        self.model.compile(sgd(lr=.2), "mse") 
+
+    def shape_grid(self, grid):
+        """
+        Shapes a grid into an appropriate form for the model
+        """
+        return grid.reshape(self.input_shape)
+    
+    def forwardpass(self, model_input):
+        """
+        Input: a SINGLE input for the model
+        Wraps a SINGLE input in an array and gets the model's predictions,
+        so that we don't have to wrap everytime we want to make a fw pass.
+        Output: the predictions for this input
+        """
+        return self.model.predict(np.array([model_input]))
+        
+    def get_action(self, state, exploration=True):
+        
+        if random.random() < player.epsilon and exploration:
+            action = random.choice(self.game.get_actions())
+        else:
+            Q = self.forwardpass(self.shape_grid(self.game.get_grid()))[0]
+            action = max(self.game.get_actions(), key=lambda a: Q[a])
+        return action
+            
+    def memorize(self, state, action, reward, state_final, gameover):
+        self.memory.append((self.shape_grid(state), action, reward, 
+                            self.shape_grid(state_final), gameover))
+        if len(self.memory) > self.max_mem:
+            self.memory.pop(0)
+        
+    def train(self):   
+
+        n = min(len(self.memory), self.batch_size)
+        sample = random.sample(self.memory, n)
+            
+        inputs = np.zeros((n, *(self.input_shape)))
+        targets = np.zeros((n, len(self.game.get_actions())))
+        
+        for i, entry in enumerate(sample):
+            inputs[i] = entry[2]
+            # compute the target, i.e. the total future reward
+            
+            if entry[4]: # if this action resulted in the end of the game
+                t = entry[2] # its future reward is just its reward
+            else:
+                Q = self.forwardpass(entry[3])[0]
+                t = entry[2] + self.discount_rate*max(Q)
+                
+            # make the target vector
+            tvector = self.forwardpass(entry[0])[0]
+            tvector[entry[1]] = t
+            targets[i] = tvector
+        return self.model.train_on_batch(inputs, targets)
+                
 if __name__ == "__main__":
     
+    # Uncomment this to play manually
+#    game = Snake()
+#    while not game.gameover:
+#        game.draw_screen()
+#        print("Choose action:", end="")
+#        a = input()
+#        r = game.transition(int(a))
+#        print("Reward:", r)
+#        print("")
+                
     game = Snake()
-    while not game.gameover:
-        game.draw_screen()
-        print("Choose action:", end="")
-        a = input()
-        r = game.transition(int(a))
-        print("Reward:", r)
-        print("")
+    player = Player(game)
+                
+    # Training
+    
+#    print("Training")
+    epochs = 100
+    longest_run = 0
+    high_score = 0
+    for epoch in range(0, epochs):
+        game.reset()
+        length = 0
+        score = 0 # compensate for the final -1
+        while not game.gameover and length < 50:
+            s = game.get_grid() 
+            a = player.get_action(s)
+            r = game.transition(a)
+            sf = game.get_grid() 
+            
+            player.memorize(s, a, r, sf, game.gameover)
+            loss = player.train()
+            
+            length += 1
+            score += r
+#        print(length, score, loss)
+        print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
+                epoch, epochs, length, score, loss))
+        longest_run = max(longest_run, length)
+        high_score = max(high_score, score)
+            
+                
+print("Longest run:", longest_run)
+print("Highest score:", high_score)
+
+# Testing
+
+def test(player, game):
+    print("Testing")    
+    tests = 100         
+    longest_run = 0
+    high_score = 0   
+    total_run = 0
+    total_score = 0
+    for test in range(0, tests):
+        game.reset()
+        length = 0
+        score = 0
+        while not game.gameover and length < 250:
+            s = game.get_grid() # get state at the start of the epoch
+            a = player.get_action(s, exploration=False)
+            r = game.transition(a)
+            
+            length += 1
+            score += r
+                
+        print("Test {}/{}: \t {} turns. \t Score {}.".format(
+                epoch, epochs, length, score))
+        longest_run = max(longest_run, length)
+        high_score = max(high_score, score)
+        
+        total_run += length
+        total_score += score
+                    
+    print("Longest run:", longest_run)
+    print("Highest score:", high_score)
+    print("Average run:", total_run/tests)
+    print("Average score:", total_score/tests)
+            
+test(player, game)
+    
