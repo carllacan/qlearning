@@ -109,9 +109,9 @@ class Snake(Game):
         
         self.extra_info = 1
         
-        self.lose_r = -1
+        self.lose_r = -5
         self.survive_r = 0
-        self.win_r = 1
+        self.win_r = 50
         
     def get_state(self):
         """
@@ -256,24 +256,29 @@ class Catch(Game):
 class Player():
     
     def __init__(self, game):
-        self.epsilon = 0.05
-        self.discount_rate = 0.7
-        self.kdt = 3 # for advantage learning
-        self.max_mem = 200
+        self.max_epsilon = 0.1
+        self.epsilon = 0.0
+        self.epsilon_growth = (self.max_epsilon - self.epsilon)/100 #/epoch
+        
+        self.max_discount = 0.9
+        self.discount = 0.0
+        self.discount_growth = (self.max_discount - self.discount)/100 #/epoch
+        
+        self.kdt = 1 # for advantage learning
+        
+        self.max_mem = 300
         self.batch_size = 50
+        
         self.memory = [] 
         self.game = game
         self.build_model()
         
-        # the discount will grow as the player learns
-        self.discount = 0.2
-        self.discount_speed = (self.discount_rate - self.discount)/3000
         
         
     def build_model(self):
         # Build deep neural network
         self.input_shape = (self.game.grid_size + self.game.extra_info,)
-        hidden_size = self.game.grid_size
+        hidden_size = 100 #self.game.grid_size
         
         self.model = Sequential()
         self.model.add(Dense(hidden_size, activation="relu", 
@@ -284,7 +289,8 @@ class Player():
 #        self.model.add(Dropout(0.25))
         self.model.add(Dense(len(game.get_actions())))
         
-        self.model.compile(sgd(lr=.01), "mse")
+        self.model.compile("adam", "mse")
+#        self.model.compile(sgd(lr=.15), "mse")
         
     def shape_grid(self, state):
         """
@@ -332,7 +338,7 @@ class Player():
             action = random.choice(self.game.get_actions())
         else:
             Q = self.forwardpass(self.shape_grid(self.game.get_state()))[0]
-            action = max(self.game.get_actions(), key=lambda a: Q[a])
+#            action = max(self.game.get_actions(), key=lambda a: Q[a])
             maxQ = max(Q)
             A = maxQ + (Q - maxQ)*self.kdt # ?
             action = max(self.game.get_actions(), key=lambda a: A[a])
@@ -351,7 +357,12 @@ class Player():
     def train(self):   
 
         # grow the discount rate
-        self.discount = min(self.discount, self.discount + self.discount_speed)
+        self.discount += self.discount_growth
+        self.discount = min(self.max_discount, self.discount) # bound
+        
+        # grow the exploration rate
+        self.epsilon += self.epsilon_growth
+        self.epsilon = min(self.max_epsilon, self.epsilon) # bound
         
         n = min(len(self.memory), self.batch_size)
         sample = random.sample(self.memory, n)
@@ -379,7 +390,7 @@ class Player():
                 # else its future reward is its reward plus the 
                 # an approximation of future rewards
                 Q = self.forwardpass(state_tp1)[0]
-                targets[i][action_t] = reward_t + self.discount_rate*max(Q)
+                targets[i][action_t] = reward_t + self.discount*max(Q)
         return self.model.train_on_batch(inputs, targets)
                 
 if __name__ == "__main__":
@@ -394,7 +405,7 @@ if __name__ == "__main__":
 #        print("Reward:", r)
 #        print("")
 #                
-    game = Catch()
+    game = Snake()
     player = Player(game)
                 
 #    print("Initial Q-values")
