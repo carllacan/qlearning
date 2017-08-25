@@ -197,6 +197,7 @@ class Catch(Game):
         self.player_width = 3
         
         self.player_pos = self.grid_width // 2 - self.player_width // 2
+        self.player_pos = random.randint(0, self.grid_width - self.player_width)
         self.fruit_pos = [0, self.grid_width // 2]#random.randint(0, self.grid_width-1)]
             
         
@@ -205,9 +206,9 @@ class Catch(Game):
         
         self.extra_info = 0
         
-        self.lose_r = -1
-        self.survive_r = 0
-        self.win_r = 1
+        self.lose_r = 0
+        self.survive_r = 1
+        self.win_r = 5
         
     def draw_player(self, tile = 1):
         for i in range(self.player_width):
@@ -255,19 +256,24 @@ class Catch(Game):
 class Player():
     
     def __init__(self, game):
-        self.epsilon = 0.1
+        self.epsilon = 0.05
         self.discount_rate = 0.9
+        self.kdt = 5 # for advantage learning
         self.max_mem = 500
-        self.batch_size = 50
+        self.batch_size = 30
         self.memory = [] 
         self.game = game
         self.build_model()
+        
+        # the discount will grow as the player learns
+        self.discount = 0.2
+        self.discount_speed = (self.discount_rate - self.discount)/1000
         
         
     def build_model(self):
         # Build deep neural network
         self.input_shape = (self.game.grid_size + self.game.extra_info,)
-        hidden_size = 100
+        hidden_size = self.game.grid_size
         
         self.model = Sequential()
         self.model.add(Dense(hidden_size, activation="relu", 
@@ -275,15 +281,16 @@ class Player():
 #                             kernel_initializer='random_uniform',
 #                             bias_initializer='random_uniform'))
         self.model.add(Dense(hidden_size, activation='relu'))
+        self.model.add(Dropout(0.25))
         self.model.add(Dense(len(game.get_actions())))
         
-        self.model.compile(sgd(lr=.2), "mse")
+        self.model.compile(sgd(lr=.01), "mse")
         
-    def shape_grid(self, grid):
+    def shape_grid(self, state):
         """
         Shapes a grid into an appropriate form for the model
         """
-        return grid.reshape(self.input_shape)
+        return state.reshape(self.input_shape)
     
 #    def build_model(self):
 #        # Build Convolutional neural network
@@ -297,21 +304,18 @@ class Player():
 #        self.model = Sequential()
 #        self.model.add(Conv2D(fnum, fshape, activation="relu", 
 #                             input_shape=self.input_shape))
-##        self.model.add(MaxPooling2D(pool_size=(2,2)))
+#        self.model.add(MaxPooling2D(pool_size=(2,2)))
 #        self.model.add(Dropout(0.25))
 #        self.model.add(Flatten())
 #        self.model.add(Dense(hidden_size, activation='relu'))
-##        self.model.add(Dense(hidden_size, activation='relu'))
-#        self.model.add(Dropout(0.25))
-#        self.model.add(Dense(hidden_size, activation='relu'))
 #        self.model.add(Dense(len(game.get_actions())))
 #        self.model.compile(sgd(lr=.2), "mse")
-        
+#        
 #    def shape_grid(self, state):
 #        """
 #        Shapes a grid into an appropriate form for the model
 #        """
-#        return state[1].reshape(self.input_shape)
+#        return state.reshape(self.input_shape)
     
     def forwardpass(self, model_input):
         """
@@ -329,6 +333,9 @@ class Player():
         else:
             Q = self.forwardpass(self.shape_grid(self.game.get_state()))[0]
             action = max(self.game.get_actions(), key=lambda a: Q[a])
+            maxQ = max(Q)
+            A = maxQ + (Q - maxQ)*self.kdt # ?
+            action = max(self.game.get_actions(), key=lambda a: A[a])
         return action
             
     def memorize(self, state, action, reward, state_final, gameover):
@@ -339,6 +346,9 @@ class Player():
         
     def train(self):   
 
+        # grow the discount rate
+        self.discount = min(self.discount, self.discount + self.discount_speed)
+        
         n = min(len(self.memory), self.batch_size)
         sample = random.sample(self.memory, n)
         inputs = np.zeros((n, *(self.input_shape)))
@@ -383,10 +393,13 @@ if __name__ == "__main__":
     game = Catch()
     player = Player(game)
                 
+#    print("Initial Q-values")
+#    print(player.forwardpass(player.shape_grid(game.get_state())))
+    
     # Training
     
 #    print("Training")
-    epochs = 250
+    epochs = 100
     longest_run = 0
     high_score = 0
     for epoch in range(0, epochs):
