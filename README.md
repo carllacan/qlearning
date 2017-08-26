@@ -16,7 +16,7 @@ A player with a neural-network provides actions and learns from the environment 
 # Results
 
 For such a simple game the player should be able to learn to play for much longer, but it is clearly working:
-[Neural network playing catch][catchgame]
+![Neural network playing catch][catchgame]
 
 # More info on Q-learning
 

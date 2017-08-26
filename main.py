@@ -397,8 +397,8 @@ class Player():
         self.epsilon = min(self.max_epsilon, self.epsilon) # bound
         
         n = min(len(self.memory), self.batch_size)
-#        sample = random.sample(self.memory, n)
-        sample = reversed(self.memory[-n:])
+        sample = random.sample(self.memory, n)
+#        sample = reversed(self.memory[-n:])
         inputs = np.zeros((n, *(self.input_shape)))
         targets = np.zeros((n, len(self.game.get_actions())))
         
@@ -461,7 +461,7 @@ def test(player, game):
     print("Average run:", total_run/tests)
     print("Average score:", total_score/tests)    
     
-def record_player(player):
+def record_player(player, fname):
     game = player.game
     game.reset()
     length = 0
@@ -493,9 +493,9 @@ def record_player(player):
         length += 1
         score += 1 if r == game.win_r else 0
         
-    imageio.mimwrite('catchgame.gif', imgs)
+    imageio.mimwrite(fname, imgs)
     
-    print(score)
+    return score
         
 
 if __name__ == "__main__":
@@ -577,5 +577,5 @@ if __name__ == "__main__":
     
     test(player, game)
     
-    record_player(player)
+    record_player(player, 'catchgame.gif')
         
