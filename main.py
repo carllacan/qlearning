@@ -309,11 +309,11 @@ class Player():
         self.input_shape = (self.game.grid_size + self.game.extra_info,)
         
         model = Sequential()
-        model.add(Dense(hidden_size, activation="relu", 
+        model.add(Dense(HIDDEN_SIZES[0], activation="relu", 
                              input_shape=self.input_shape,
                              kernel_initializer='random_uniform',
                              bias_initializer='random_uniform'))
-        self.model.add(Dropout(DROPOUT))
+        model.add(Dropout(DROPOUT))
         for h in HIDDEN_SIZES:
             model.add(Dense(h, activation='relu'))
         model.add(Dense(len(self.game.get_actions())))
@@ -323,26 +323,26 @@ class Player():
         
         return model
             
-    # Another model with convolutional layers. Comment or uncomment at need.
-    def build_model(self):
-        
-        self.input_shape = (*self.game.grid_shape, FRAMES_USED)
-        fshape = FILTER_SHAPE
-#        fnum = (self.game.grid_height - fshape[0] + 1 
-#                )*(self.game.grid_width - fshape[1] + 1)
-        fnum = FILTER_NUM
-        model = Sequential()
-        model.add(Conv2D(fnum, fshape, activation="relu", 
-                             input_shape=self.input_shape))
-        model.add(MaxPooling2D(pool_size=POOL_SHAPE))
-        model.add(Dropout(DROPOUT))
-        model.add(Flatten())
-        for h in HIDDEN_SIZES:
-            model.add(Dense(h, activation='relu'))
-        model.add(Dense(len(self.game.get_actions())))
-        model.compile(sgd(lr=LEARNING_RATE), "mse")
-        
-        return model
+#    # Another model with convolutional layers. Comment or uncomment at need.
+#    def build_model(self):
+#        
+#        self.input_shape = (*self.game.grid_shape, FRAMES_USED)
+#        fshape = FILTER_SHAPE
+##        fnum = (self.game.grid_height - fshape[0] + 1 
+##                )*(self.game.grid_width - fshape[1] + 1)
+#        fnum = FILTER_NUM
+#        model = Sequential()
+#        model.add(Conv2D(fnum, fshape, activation="relu", 
+#                             input_shape=self.input_shape))
+#        model.add(MaxPooling2D(pool_size=POOL_SHAPE))
+#        model.add(Dropout(DROPOUT))
+#        model.add(Flatten())
+#        for h in HIDDEN_SIZES:
+#            model.add(Dense(h, activation='relu'))
+#        model.add(Dense(len(self.game.get_actions())))
+#        model.compile(sgd(lr=LEARNING_RATE), "mse")
+#        
+#        return model
         
     def shape_grid(self, state):
         """
@@ -398,7 +398,10 @@ class Player():
         
         n = min(len(self.memory), self.batch_size)
         sample = random.sample(self.memory, n)
+#        weights = np.linspace(0, 1, num = n)
+#        sample = random.choices(self.memory, weights=weights, k=n)
 #        sample = reversed(self.memory[-n:])
+        sample = random.sample(self.memory, n)
         inputs = np.zeros((n, *(self.input_shape)))
         targets = np.zeros((n, len(self.game.get_actions())))
         
@@ -466,7 +469,7 @@ def record_player(player, fname):
     game.reset()
     length = 0
     score = 0
-    tilesize = 48
+    tilesize = 24
     imgs = []
     while not game.gameover and length < 1000:
         s = game.get_state()[-1]
@@ -486,7 +489,6 @@ def record_player(player, fname):
         draw.text((10, 10), "Score: {}".format(score), fill='black',
                   font=ImageFont.truetype("Ubuntu-L.ttf", int(tilesize*0.6)))
 
-#        img.save('gifmaking/turn{}.png'.format(length), 'png')
         img_array = np.fromstring(img.tobytes(), dtype=np.uint8)
         imgs.append(img_array.reshape((*size, 3)))
         
@@ -494,17 +496,16 @@ def record_player(player, fname):
         score += 1 if r == game.win_r else 0
         
     imageio.mimwrite(fname, imgs)
-    
-    return score
+
         
 
 if __name__ == "__main__":
     VERBOSE_TRAIN = True
     
     PLAYER = 1
-    FRUIT = 1
+    FRUIT = 2
     
-    BATCH_SIZE = 100
+    BATCH_SIZE = 50
     EPOCHS = 1000
     
     MAX_EPSILON = 0.1
@@ -520,13 +521,13 @@ if __name__ == "__main__":
     LOSE_PRIORITY = 1
     SUR_PRIORITY = 1
     
-    FRAMES_USED = 4
-    HIDDEN_SIZES = (100,)
+    FRAMES_USED = 1
+    HIDDEN_SIZES = (60, 60)
     FILTER_SHAPE = (3, 3)
     FILTER_NUM = 300
     POOL_SHAPE = (2, 2)
     DROPOUT = 0.01
-    LEARNING_RATE = 0.15
+    LEARNING_RATE = 0.1
     
 #     Uncomment this to play manually
 #    game = Catch()
@@ -564,7 +565,6 @@ if __name__ == "__main__":
             player.memorize(s, a, r, sf, game.gameover)
         loss = player.train()
             
-#        print(length, score, loss)
         if VERBOSE_TRAIN:
             print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
                 epoch, epochs, length, score, loss))
