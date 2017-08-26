@@ -7,6 +7,8 @@ Created on Fri Aug 25 12:13:04 2017
 """
 
 import numpy as np
+from matplotlib import pyplot as plt
+from PIL import Image, ImageFont, ImageDraw, ImageEnhance
 import random
 
 from keras.models import Sequential
@@ -210,7 +212,7 @@ class Catch(Game):
         Game.__init__(self, 10, 10)
         self.player_width = 3
         
-        self.player_pos = self.grid_width // 2 - self.player_width // 2
+#        self.player_pos = self.grid_width // 2 - self.player_width // 2
         self.player_pos = random.randint(0, self.grid_width - self.player_width)
         self.fruit_pos = [0, self.grid_width // 2]#random.randint(0, self.grid_width-1)]
             
@@ -219,10 +221,10 @@ class Catch(Game):
         self.grid[tuple(self.fruit_pos)] = 1
         
         self.extra_info = 0
-        
-        self.lose_r = -5
+    
+        self.lose_r = -1
         self.survive_r = 0
-        self.win_r = 5
+        self.win_r = 1
         
     def draw_player(self, tile = 1):
         for i in range(self.player_width):
@@ -365,8 +367,7 @@ class Player():
         else:
             Q = self.forwardpass(self.shape_grid(self.game.get_state()))[0]
 #            action = max(self.game.get_actions(), key=lambda a: Q[a])
-            maxQ = max(Q)
-            A = maxQ + (Q - maxQ)*self.kdt 
+            A = max(Q) + (Q - max(Q))*self.kdt 
             action = max(self.game.get_actions(), key=lambda a: A[a])
         return action
             
@@ -396,7 +397,8 @@ class Player():
         self.epsilon = min(self.max_epsilon, self.epsilon) # bound
         
         n = min(len(self.memory), self.batch_size)
-        sample = self.memory[-n:]#random.sample(self.memory, n)
+#        sample = random.sample(self.memory, n)
+        sample = reversed(self.memory[-n:])
         inputs = np.zeros((n, *(self.input_shape)))
         targets = np.zeros((n, len(self.game.get_actions())))
         
@@ -459,6 +461,36 @@ def test(player, game):
     print("Average run:", total_run/tests)
     print("Average score:", total_score/tests)    
     
+def record_player(player):
+    game = player.game
+    game.reset()
+    length = 0
+    score = 0
+    tilesize = 48
+    while not game.gameover and length < 1000:
+        s = game.get_state()[-1]
+        a = player.get_action(s)
+        r = game.transition(a)
+        
+        size = game.grid_height*tilesize, game.grid_width*tilesize
+        img = Image.new('RGB', size, 'white')
+        draw = ImageDraw.Draw(img)
+        for y in range(game.grid_height):
+            for x in range(game.grid_width):
+                if s[y, x] != 0:
+                    box = tilesize*x, tilesize*y, tilesize*(x+1), tilesize*(y+1)
+                    draw.rectangle(box, fill="blue")
+                    
+        
+        draw.text((10, 10), "Score: {}".format(score), fill='black',
+                  font=ImageFont.truetype("Ubuntu-L.ttf", int(tilesize*0.6)))
+
+        img.save('gifmaking/turn{}.png'.format(length), 'png')
+        
+        length += 1
+        score += 1 if r == game.win_r else 0
+        
+        
 
 if __name__ == "__main__":
     VERBOSE_TRAIN = True
@@ -467,28 +499,28 @@ if __name__ == "__main__":
     FRUIT = 1
     
     BATCH_SIZE = 100
-    EPOCHS = 5000
+    EPOCHS = 300
     
-    MAX_EPSILON = 0.0
+    MAX_EPSILON = 0.1
     EPOCHS_TO_MAX_EPSILON = 100
-    MAX_DISCOUNT = 1
-    EPOCHS_TO_MAX_DISCOUNT = 0.95
+    MAX_DISCOUNT = 0.9
+    EPOCHS_TO_MAX_DISCOUNT = 1
     KDT = 1 # advantage learning parameter k/dt
     
     # Experience replay (prioritized)
     # not randomized: just take the latest ones.
     MEM_SIZE = 500
-    WIN_PRIORITY = 5
+    WIN_PRIORITY = 1
     LOSE_PRIORITY = 1
     SUR_PRIORITY = 1
     
-    FRAMES_USED = 7
-    HIDDEN_SIZES = (100,80)
+    FRAMES_USED = 4
+    HIDDEN_SIZES = (100,)
     FILTER_SHAPE = (3, 3)
     FILTER_NUM = 300
     POOL_SHAPE = (2, 2)
     DROPOUT = 0.01
-    LEARNING_RATE = 0.2
+    LEARNING_RATE = 0.15
     
 #     Uncomment this to play manually
 #    game = Catch()
@@ -514,7 +546,7 @@ if __name__ == "__main__":
         length = 0
         score = 0 
             
-        while not game.gameover and length < 100:
+        while not game.gameover and length < 500:
             s = game.get_state() 
             a = player.get_action(s)
             r = game.transition(a)
@@ -522,6 +554,7 @@ if __name__ == "__main__":
             
             length += 1
             score += 1 if r == game.win_r else 0
+            
             player.memorize(s, a, r, sf, game.gameover)
         loss = player.train()
             
@@ -537,4 +570,6 @@ if __name__ == "__main__":
     print("Highest score:", high_score)
     
     test(player, game)
+    
+    record_player(player)
         
