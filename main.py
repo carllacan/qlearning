@@ -7,8 +7,8 @@ Created on Fri Aug 25 12:13:04 2017
 """
 
 import numpy as np
-from matplotlib import pyplot as plt
-from PIL import Image, ImageFont, ImageDraw, ImageEnhance
+import imageio
+from PIL import Image, ImageFont, ImageDraw
 import random
 
 from keras.models import Sequential
@@ -467,6 +467,7 @@ def record_player(player):
     length = 0
     score = 0
     tilesize = 48
+    imgs = []
     while not game.gameover and length < 1000:
         s = game.get_state()[-1]
         a = player.get_action(s)
@@ -485,11 +486,16 @@ def record_player(player):
         draw.text((10, 10), "Score: {}".format(score), fill='black',
                   font=ImageFont.truetype("Ubuntu-L.ttf", int(tilesize*0.6)))
 
-        img.save('gifmaking/turn{}.png'.format(length), 'png')
+#        img.save('gifmaking/turn{}.png'.format(length), 'png')
+        img_array = np.fromstring(img.tobytes(), dtype=np.uint8)
+        imgs.append(img_array.reshape((*size, 3)))
         
         length += 1
         score += 1 if r == game.win_r else 0
         
+    imageio.mimwrite('catchgame.gif', imgs)
+    
+    print(score)
         
 
 if __name__ == "__main__":
@@ -499,7 +505,7 @@ if __name__ == "__main__":
     FRUIT = 1
     
     BATCH_SIZE = 100
-    EPOCHS = 300
+    EPOCHS = 1000
     
     MAX_EPSILON = 0.1
     EPOCHS_TO_MAX_EPSILON = 100
