@@ -103,7 +103,7 @@ class Game:
 class Snake(Game):
     
     def __init__(self):
-        Game.__init__(self, 8, 8)
+        Game.__init__(self, 5, 5)
         # initialize the snake's direction
 #        self.snake_dir = 0 
         self.snake_dir = random.randint(1,4)
@@ -114,12 +114,12 @@ class Snake(Game):
         self.head_pos = self.get_free_cell()
         self.fruit_pos = self.get_free_cell()
         # paint them
-        self.set_tile(self.head_pos, 1) # paint the head
-        self.set_tile(self.fruit_pos, 2) # paint the head
+        self.set_tile(self.head_pos, PLAYER) # paint the head
+        self.set_tile(self.fruit_pos, FRUIT) # paint the fruit
         
         self.extra_info = 0
         
-        self.lose_r = -1
+        self.lose_r = -5
         self.survive_r = 0
         self.win_r = 1
         
@@ -181,12 +181,12 @@ class Snake(Game):
                 self.head_pos[1] -= 1
                 
             # replace head
-            self.set_tile(self.head_pos, 1)
+            self.set_tile(self.head_pos, PLAYER)
             
             # if the fruit was there
             if self.fruit_pos == self.head_pos:
                 self.fruit_pos = self.get_free_cell() # reposition fruit
-                self.set_tile(self.fruit_pos, 2) # paint fruit
+                self.set_tile(self.fruit_pos, FRUIT) # paint fruit
                 reward = self.win_r # reward the player
             
         return reward
@@ -220,9 +220,9 @@ class Catch(Game):
         
         self.extra_info = 0
         
-        self.lose_r = 0
-        self.survive_r = 1
-        self.win_r = 50
+        self.lose_r = -5
+        self.survive_r = 0
+        self.win_r = 5
         
     def draw_player(self, tile = 1):
         for i in range(self.player_width):
@@ -305,15 +305,15 @@ class Player():
     def build_model(self):
         # Build deep neural network
         self.input_shape = (self.game.grid_size + self.game.extra_info,)
-        hidden_size = HIDDEN_SIZE
         
         model = Sequential()
         model.add(Dense(hidden_size, activation="relu", 
                              input_shape=self.input_shape,
                              kernel_initializer='random_uniform',
                              bias_initializer='random_uniform'))
-        model.add(Dense(hidden_size, activation='relu'))
-#        self.model.add(Dropout(0.25))
+        self.model.add(Dropout(DROPOUT))
+        for h in HIDDEN_SIZES:
+            model.add(Dense(h, activation='relu'))
         model.add(Dense(len(self.game.get_actions())))
         
 #        self.model.compile("adam", "mse")
@@ -325,7 +325,6 @@ class Player():
     def build_model(self):
         
         self.input_shape = (*self.game.grid_shape, FRAMES_USED)
-        hidden_size = HIDDEN_SIZE
         fshape = FILTER_SHAPE
 #        fnum = (self.game.grid_height - fshape[0] + 1 
 #                )*(self.game.grid_width - fshape[1] + 1)
@@ -336,7 +335,8 @@ class Player():
         model.add(MaxPooling2D(pool_size=POOL_SHAPE))
         model.add(Dropout(DROPOUT))
         model.add(Flatten())
-        model.add(Dense(hidden_size, activation='relu'))
+        for h in HIDDEN_SIZES:
+            model.add(Dense(h, activation='relu'))
         model.add(Dense(len(self.game.get_actions())))
         model.compile(sgd(lr=LEARNING_RATE), "mse")
         
@@ -396,7 +396,7 @@ class Player():
         self.epsilon = min(self.max_epsilon, self.epsilon) # bound
         
         n = min(len(self.memory), self.batch_size)
-        sample = random.sample(self.memory, n)
+        sample = self.memory[-n:]#random.sample(self.memory, n)
         inputs = np.zeros((n, *(self.input_shape)))
         targets = np.zeros((n, len(self.game.get_actions())))
         
@@ -460,7 +460,36 @@ def test(player, game):
     print("Average score:", total_score/tests)    
     
 
-def main():
+if __name__ == "__main__":
+    VERBOSE_TRAIN = True
+    
+    PLAYER = 1
+    FRUIT = 1
+    
+    BATCH_SIZE = 100
+    EPOCHS = 5000
+    
+    MAX_EPSILON = 0.0
+    EPOCHS_TO_MAX_EPSILON = 100
+    MAX_DISCOUNT = 1
+    EPOCHS_TO_MAX_DISCOUNT = 0.95
+    KDT = 1 # advantage learning parameter k/dt
+    
+    # Experience replay (prioritized)
+    # not randomized: just take the latest ones.
+    MEM_SIZE = 500
+    WIN_PRIORITY = 5
+    LOSE_PRIORITY = 1
+    SUR_PRIORITY = 1
+    
+    FRAMES_USED = 7
+    HIDDEN_SIZES = (100,80)
+    FILTER_SHAPE = (3, 3)
+    FILTER_NUM = 300
+    POOL_SHAPE = (2, 2)
+    DROPOUT = 0.01
+    LEARNING_RATE = 0.2
+    
 #     Uncomment this to play manually
 #    game = Catch()
 #    while not game.gameover:
@@ -471,7 +500,7 @@ def main():
 #        print("Reward:", r)
 #        print("")
 #                
-    game = Snake()
+    game = Catch()
     player = Player(game)
                     
     # Training
@@ -483,20 +512,19 @@ def main():
     for epoch in range(0, epochs):
         game.reset()
         length = 0
-        score = 0 # compensate for the final -1
-        while not game.gameover and length < 50:
+        score = 0 
+            
+        while not game.gameover and length < 100:
             s = game.get_state() 
             a = player.get_action(s)
             r = game.transition(a)
             sf = game.get_state() 
             
-#            game.draw_screen()
-            
-            player.memorize(s, a, r, sf, game.gameover)
-            loss = player.train()
-            
             length += 1
             score += 1 if r == game.win_r else 0
+            player.memorize(s, a, r, sf, game.gameover)
+        loss = player.train()
+            
 #        print(length, score, loss)
         if VERBOSE_TRAIN:
             print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
@@ -510,31 +538,3 @@ def main():
     
     test(player, game)
         
-
-if __name__ == "__main__":
-    VERBOSE_TRAIN = True
-    
-    BATCH_SIZE = 50
-    EPOCHS = 500
-    
-    MAX_EPSILON = 0.1
-    EPOCHS_TO_MAX_EPSILON = 300
-    MAX_DISCOUNT = 0.9
-    EPOCHS_TO_MAX_DISCOUNT = 300
-    KDT = 1 # advantage learning parameter k/dt
-    
-    # Experience replay (prioritized)
-    MEM_SIZE = 500
-    WIN_PRIORITY = 10
-    LOSE_PRIORITY = 5
-    SUR_PRIORITY = 1
-    
-    FRAMES_USED = 3
-    HIDDEN_SIZE = 120
-    FILTER_SHAPE = (3, 3)
-    FILTER_NUM = 80
-    POOL_SHAPE = (2, 2)
-    DROPOUT = 0.2
-    LEARNING_RATE = 0.1
-    
-    main()
