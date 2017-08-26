@@ -15,9 +15,9 @@ from keras.layers.convolutional import Convolution2D as Conv2D
 from keras.layers import MaxPooling2D
 from keras.layers import Flatten
 from keras.layers import Dropout
-from keras.constraints import maxnorm
+#from keras.constraints import maxnorm
 from keras.optimizers import sgd
-import keras.initializers
+#import keras.initializers
 
 class Game:
     
@@ -34,8 +34,16 @@ class Game:
         self.grid = np.zeros(self.grid_shape)
         self.gameover = False
         
+        self.last_frames = []
+        [self.remember_frame(self.grid) for i in range(FRAMES_USED)]
+        
         self.extra_info = 0
         
+    def remember_frame(self, state):
+        self.last_frames.append(state)
+        if len(self.last_frames) > FRAMES_USED:
+            self.last_frames.pop(0)
+            
     def transition(self, action):
         """
         Inputs: action
@@ -49,7 +57,9 @@ class Game:
         """
         Returns the grid.
         """
-        return self.grid
+#        return self.grid
+        return np.array(self.last_frames) 
+        # easier to use built-in arrays and then convert to np.array
 
     def get_actions(self):
         """
@@ -113,12 +123,12 @@ class Snake(Game):
         self.survive_r = 0
         self.win_r = 1
         
-    def get_state(self):
-        """
-        Returns the grid AND the direction of the snake.
-        """
-#        return np.append(self.snake_dir, self.grid)
-        return self.grid
+#    def get_state(self):
+#        """
+#        Returns the grid AND the direction of the snake.
+#        """
+##        return np.append(self.snake_dir, self.grid)
+#        return self.grid
     
     def get_actions(self):
         return [0, 1, 2, 3, 4] # keep going, move up, right, down, left
@@ -126,6 +136,8 @@ class Snake(Game):
     def tile_symbols(self, tile):
 #        return ("░", "▓", "█")[tile]
         return ("   ", " · ", " # ")[tile]
+                
+
     
     def transition(self, action):
         """
@@ -134,6 +146,8 @@ class Snake(Game):
         Mark the game as finished if there is a collision
         Output: reward.
         """
+        self.remember_frame(self.grid)
+        
         reward = self.survive_r
         # Do nothing if the snake is moving in the opposite direction
         if action == 1 and self.snake_dir != 3:
@@ -262,7 +276,8 @@ class Player():
         # or do I try to maximize my scores?)
         self.max_epsilon = MAX_EPSILON # 0.1
         self.epsilon = 0.0
-        self.epsilon_growth = (self.max_epsilon - self.epsilon)/500 #/epoch
+        self.epsilon_growth = (self.max_epsilon - self.epsilon
+                               )/EPOCHS_TO_MAX_EPSILON #/epoch
         
         # Discount rate: determines how much future rewards are taken into
         # account when training. Zero will make the player myopic (prefer
@@ -270,14 +285,15 @@ class Player():
         # exact values (so unless deterministic game make discount < 1)
         self.max_discount = MAX_DISCOUNT #0.9
         self.discount = 0.0
-        self.discount_growth = (self.max_discount - self.discount)/500 #/epoch
+        self.discount_growth = (self.max_discount - self.discount
+                                )/EPOCHS_TO_MAX_DISCOUNT #/epoch
         
         # Advantage learning parameter. It is actually k/dt, with dt being
         # the steptime of a frame. Not sure how to set it.
-        self.kdt = 1
+        self.kdt = KDT
         
-        self.max_mem = 500
         self.batch_size = BATCH_SIZE #30
+        self.max_mem = MEM_SIZE
         
         self.memory = [] 
         self.game = game
@@ -298,7 +314,7 @@ class Player():
                              bias_initializer='random_uniform'))
         model.add(Dense(hidden_size, activation='relu'))
 #        self.model.add(Dropout(0.25))
-        model.add(Dense(len(game.get_actions())))
+        model.add(Dense(len(self.game.get_actions())))
         
 #        self.model.compile("adam", "mse")
         model.compile(sgd(lr=LEARNING_RATE), "mse")
@@ -306,25 +322,25 @@ class Player():
         return model
             
     # Another model with convolutional layers. Comment or uncomment at need.
-#    def build_model(self):
-#        
-#        self.input_shape = (*self.game.grid_shape, 1)
-#        hidden_size = 100
-#        fshape = (2, 2)
+    def build_model(self):
+        
+        self.input_shape = (*self.game.grid_shape, FRAMES_USED)
+        hidden_size = HIDDEN_SIZE
+        fshape = FILTER_SHAPE
 #        fnum = (self.game.grid_height - fshape[0] + 1 
 #                )*(self.game.grid_width - fshape[1] + 1)
-#        fnum = 32
-#        model = Sequential()
-#        model.add(Conv2D(fnum, fshape, activation="relu", 
-#                             input_shape=self.input_shape))
-##        model.add(MaxPooling2D(pool_size=(2,2)))
-#        model.add(Dropout(0.25))
-#        model.add(Flatten())
-#        model.add(Dense(hidden_size, activation='relu'))
-#        model.add(Dense(len(game.get_actions())))
-#        model.compile(sgd(lr=.2), "mse")
-#        
-#        return model
+        fnum = FILTER_NUM
+        model = Sequential()
+        model.add(Conv2D(fnum, fshape, activation="relu", 
+                             input_shape=self.input_shape))
+        model.add(MaxPooling2D(pool_size=POOL_SHAPE))
+        model.add(Dropout(DROPOUT))
+        model.add(Flatten())
+        model.add(Dense(hidden_size, activation='relu'))
+        model.add(Dense(len(self.game.get_actions())))
+        model.compile(sgd(lr=LEARNING_RATE), "mse")
+        
+        return model
         
     def shape_grid(self, state):
         """
@@ -358,8 +374,13 @@ class Player():
         experience = (self.shape_grid(state), action, reward, 
                             self.shape_grid(state_final), gameover)
         # Prioritized Experience Replay
-        importance = 1 if reward == 0 else 5
-        for i in range(importance):
+        if reward == self.game.win_r:
+            priority = WIN_PRIORITY
+        elif reward == self.game.lose_r:
+            priority = LOSE_PRIORITY
+        else:
+            priority = SUR_PRIORITY
+        for i in range(priority):
             self.memory.append(experience)
             if len(self.memory) > self.max_mem:
                 self.memory.pop(0)
@@ -492,10 +513,28 @@ def main():
 
 if __name__ == "__main__":
     VERBOSE_TRAIN = True
-    MAX_EPSILON = 0.5
-    MAX_DISCOUNT = 0.9
-    BATCH_SIZE = 10
-    HIDDEN_SIZE = 100
-    LEARNING_RATE = 0.15
+    
+    BATCH_SIZE = 50
     EPOCHS = 500
+    
+    MAX_EPSILON = 0.1
+    EPOCHS_TO_MAX_EPSILON = 300
+    MAX_DISCOUNT = 0.9
+    EPOCHS_TO_MAX_DISCOUNT = 300
+    KDT = 1 # advantage learning parameter k/dt
+    
+    # Experience replay (prioritized)
+    MEM_SIZE = 500
+    WIN_PRIORITY = 10
+    LOSE_PRIORITY = 5
+    SUR_PRIORITY = 1
+    
+    FRAMES_USED = 3
+    HIDDEN_SIZE = 120
+    FILTER_SHAPE = (3, 3)
+    FILTER_NUM = 80
+    POOL_SHAPE = (2, 2)
+    DROPOUT = 0.2
+    LEARNING_RATE = 0.1
+    
     main()
