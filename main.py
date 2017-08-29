@@ -15,6 +15,8 @@ from keras.models import Sequential
 from keras.layers.core import Dense
 from keras.layers.convolutional import Convolution2D as Conv2D
 from keras.layers import MaxPooling2D
+from keras.layers import BatchNormalization
+from keras.layers import Activation
 from keras.layers import Flatten
 from keras.layers import Dropout
 #from keras.constraints import maxnorm
@@ -122,9 +124,9 @@ class Snake(Game):
         self.extra_info = 0
         
         self.lose_r = -5
-        self.survive_r = 0
-        self.win_r = 1
-        
+        self.survive_r = 1
+        self.win_r = 5
+
 #    def get_state(self):
 #        """
 #        Returns the grid AND the direction of the snake.
@@ -222,9 +224,9 @@ class Catch(Game):
         
         self.extra_info = 0
     
-        self.lose_r = -1
+        self.lose_r = -10
         self.survive_r = 0
-        self.win_r = 1
+        self.win_r = 10
         
     def draw_player(self, tile = 1):
         for i in range(self.player_width):
@@ -323,26 +325,34 @@ class Player():
         
         return model
             
-#    # Another model with convolutional layers. Comment or uncomment at need.
-#    def build_model(self):
-#        
-#        self.input_shape = (*self.game.grid_shape, FRAMES_USED)
-#        fshape = FILTER_SHAPE
-##        fnum = (self.game.grid_height - fshape[0] + 1 
-##                )*(self.game.grid_width - fshape[1] + 1)
-#        fnum = FILTER_NUM
-#        model = Sequential()
-#        model.add(Conv2D(fnum, fshape, activation="relu", 
-#                             input_shape=self.input_shape))
-#        model.add(MaxPooling2D(pool_size=POOL_SHAPE))
-#        model.add(Dropout(DROPOUT))
-#        model.add(Flatten())
-#        for h in HIDDEN_SIZES:
-#            model.add(Dense(h, activation='relu'))
-#        model.add(Dense(len(self.game.get_actions())))
-#        model.compile(sgd(lr=LEARNING_RATE), "mse")
-#        
-#        return model
+##    # Another model with convolutional layers. Comment or uncomment at need.
+    def build_model(self):
+        
+        self.input_shape = (*self.game.grid_shape, FRAMES_USED)
+#        fnum = (self.game.grid_height - fshape[0] + 1 
+#                )*(self.game.grid_width - fshape[1] + 1)
+        model = Sequential()
+        for s in CONV_SIZES:
+            model.add(BatchNormalization(input_shape=self.input_shape))    
+            model.add(Dropout(DROPOUT))
+            model.add(Conv2D(s[0], s[1], activation="relu", 
+                                 padding='valid',
+#                                 subsample=(2, 2), 
+#                                 dim_ordering='th',
+#                                 input_shape=self.input_shape,
+                                 kernel_initializer=INITIALIZER,
+                                 bias_initializer=INITIALIZER))
+        if POOL_SHAPE != (0, 0):
+            model.add(MaxPooling2D(pool_size=POOL_SHAPE))
+        model.add(Flatten())
+        for s in DENSE_SIZES:
+            model.add(BatchNormalization())
+            model.add(Dense(s, activation='relu'))
+        model.add(Dense(len(self.game.get_actions())))
+        model.compile(sgd(lr=LEARNING_RATE), "mse")
+        
+        return model
+    
         
     def shape_grid(self, state):
         """
@@ -397,11 +407,18 @@ class Player():
         self.epsilon = min(self.max_epsilon, self.epsilon) # bound
         
         n = min(len(self.memory), self.batch_size)
+        
+        # Take the sample at random
         sample = random.sample(self.memory, n)
-#        weights = np.linspace(0, 1, num = n)
-#        sample = random.choices(self.memory, weights=weights, k=n)
+        # Take the last experiences, last in first out
 #        sample = reversed(self.memory[-n:])
-        sample = random.sample(self.memory, n)
+        
+        # Take the sample at random but prioritizing the last experiences
+#        w = np.linspace(0.1, 1, num = len(self.memory))
+#        w = w/np.sum(w)
+#        s = np.random.choice(len(self.memory), p=w, size=n, replace=False)
+#        sample = np.array(self.memory)[s]
+        
         inputs = np.zeros((n, *(self.input_shape)))
         targets = np.zeros((n, len(self.game.get_actions())))
         
@@ -431,6 +448,47 @@ class Player():
         # Update secondary network weights to those of the primary
         self.model2.set_weights(self.model.get_weights())
         return self.model.train_on_batch(inputs, targets)
+    
+    def save(self, fname):
+        self.model.save_weights(fname + '.h5')
+        
+    def load(self, fname):
+        self.model.save_weights(fname + '.h5')
+    
+def train(player, game):
+    
+    # Training
+    print("\n=== Training ===\n")
+    
+    longest_run = 0
+    high_score = 0
+    for epoch in range(0, EPOCHS):
+        game.reset()
+        length = 0
+        score = 0 
+            
+        while not game.gameover and length < 500:
+            s = game.get_state() 
+            a = player.get_action(s)
+            r = game.transition(a)
+            sf = game.get_state() 
+            
+            length += 1
+            score += 1 if r == game.win_r else 0
+            
+#            if length > FRAMES_USED:
+            player.memorize(s, a, r, sf, game.gameover)
+        loss = player.train()
+            
+        if VERBOSE_TRAIN:
+            print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
+                epoch, epochs, length, score, loss))
+        longest_run = max(longest_run, length)
+        high_score = max(high_score, score)
+            
+                
+    print("Longest run:", longest_run)
+    print("Highest score:", high_score)
     
 def test(player, game):
         # Testing
@@ -503,31 +561,32 @@ if __name__ == "__main__":
     VERBOSE_TRAIN = True
     
     PLAYER = 1
-    FRUIT = 2
+    FRUIT = 1
     
-    BATCH_SIZE = 50
-    EPOCHS = 1000
+    BATCH_SIZE = 100
+    EPOCHS = 10000
     
     MAX_EPSILON = 0.1
-    EPOCHS_TO_MAX_EPSILON = 100
-    MAX_DISCOUNT = 0.9
-    EPOCHS_TO_MAX_DISCOUNT = 1
-    KDT = 1 # advantage learning parameter k/dt
+    EPOCHS_TO_MAX_EPSILON = 2000
+    MAX_DISCOUNT = 0.95
+    EPOCHS_TO_MAX_DISCOUNT = 1000
+    KDT = 1.1 # advantage learning parameter k/dt
     
     # Experience replay (prioritized)
-    # not randomized: just take the latest ones.
     MEM_SIZE = 500
-    WIN_PRIORITY = 1
-    LOSE_PRIORITY = 1
+    WIN_PRIORITY = 5
+    LOSE_PRIORITY = 10
     SUR_PRIORITY = 1
     
-    FRAMES_USED = 1
-    HIDDEN_SIZES = (60, 60)
-    FILTER_SHAPE = (3, 3)
-    FILTER_NUM = 300
-    POOL_SHAPE = (2, 2)
-    DROPOUT = 0.01
-    LEARNING_RATE = 0.1
+    INITIALIZER = 'random_uniform'
+    FRAMES_USED = 5
+    CONV_SIZES = ((32, (2, 2)),
+                  (64, (2, 2)),
+                  (64, (3, 3)))
+    DENSE_SIZES = (256,128)
+    POOL_SHAPE = (0, 0)
+    DROPOUT = 0.1
+    LEARNING_RATE = 0.05
     
 #     Uncomment this to play manually
 #    game = Catch()
@@ -539,43 +598,13 @@ if __name__ == "__main__":
 #        print("Reward:", r)
 #        print("")
 #                
-    game = Catch()
+    game = Snake()
     player = Player(game)
-                    
-    # Training
-    print("\n=== Training ===\n")
-    
-    epochs = EPOCHS
-    longest_run = 0
-    high_score = 0
-    for epoch in range(0, epochs):
-        game.reset()
-        length = 0
-        score = 0 
-            
-        while not game.gameover and length < 500:
-            s = game.get_state() 
-            a = player.get_action(s)
-            r = game.transition(a)
-            sf = game.get_state() 
-            
-            length += 1
-            score += 1 if r == game.win_r else 0
-            
-            player.memorize(s, a, r, sf, game.gameover)
-        loss = player.train()
-            
-        if VERBOSE_TRAIN:
-            print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
-                epoch, epochs, length, score, loss))
-        longest_run = max(longest_run, length)
-        high_score = max(high_score, score)
-            
-                
-    print("Longest run:", longest_run)
-    print("Highest score:", high_score)
-    
+                 
+    train(player, game)
     test(player, game)
     
     record_player(player, 'catchgame.gif')
+    
+    player.save('snakeplayer')
         
