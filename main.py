@@ -311,12 +311,12 @@ class Player():
         self.input_shape = (self.game.grid_size + self.game.extra_info,)
         
         model = Sequential()
-        model.add(Dense(HIDDEN_SIZES[0], activation="relu", 
+        model.add(Dense(DENSE_SIZES[0], activation="relu", 
                              input_shape=self.input_shape,
                              kernel_initializer='random_uniform',
                              bias_initializer='random_uniform'))
         model.add(Dropout(DROPOUT))
-        for h in HIDDEN_SIZES:
+        for h in DENSE_SIZES:
             model.add(Dense(h, activation='relu'))
         model.add(Dense(len(self.game.get_actions())))
         
@@ -443,7 +443,9 @@ class Player():
                 # else its future reward is its reward plus the 
                 # an approximation of future rewards
                 Q = self.forwardpass(state_tp1, True)[0]
-                targets[i][action_t] = reward_t + self.discount*max(Q)
+#                targets[i][action_t] = reward_t + self.discount*max(Q)
+                nextQ = Q[self.get_action(state_tp1)]
+                targets[i][action_t] = reward_t + self.discount*nextQ #SARSA
                 
         # Update secondary network weights to those of the primary
         self.model2.set_weights(self.model.get_weights())
@@ -482,7 +484,7 @@ def train(player, game):
             
         if VERBOSE_TRAIN:
             print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
-                epoch, epochs, length, score, loss))
+                epoch, EPOCHS, length, score, loss))
         longest_run = max(longest_run, length)
         high_score = max(high_score, score)
             
@@ -575,17 +577,16 @@ if __name__ == "__main__":
     # Experience replay (prioritized)
     MEM_SIZE = 500
     WIN_PRIORITY = 5
-    LOSE_PRIORITY = 10
+    LOSE_PRIORITY = 5
     SUR_PRIORITY = 1
     
     INITIALIZER = 'random_uniform'
-    FRAMES_USED = 5
-    CONV_SIZES = ((32, (2, 2)),
-                  (64, (2, 2)),
+    FRAMES_USED = 4
+    CONV_SIZES = ((32, (3, 3)),
                   (64, (3, 3)))
-    DENSE_SIZES = (256,128)
+    DENSE_SIZES = (256, 128)
     POOL_SHAPE = (0, 0)
-    DROPOUT = 0.1
+    DROPOUT = 0.25
     LEARNING_RATE = 0.05
     
 #     Uncomment this to play manually
