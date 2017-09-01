@@ -14,6 +14,8 @@ from player import Player
 from games import Snake as Snake
 from games import Catch as Catch
 
+# TODO make it so that game doesn't need frames_used
+
 
 def play_manually(game):
     while not game.gameover:
@@ -36,7 +38,7 @@ def train(player, game, epochs, verbose = True):
         length = 0
         score = 0 
             
-        while not game.gameover and length < 500:
+        while not game.gameover and length < 100:
             s = game.get_state() 
             a = player.get_action(s)
             r = game.transition(a)
@@ -130,35 +132,34 @@ if __name__ == "__main__":
     
     
     player_params = {"max_epsilon": 0.1,
-                     "epochs_to_max_epsilon": 2000,
+                     "epochs_to_max_epsilon": 500,
                      "max_discount":0.95,
                      "epochs_to_max_discount":500,
                      "kdt":1.0,  # advantage learning k/dt parameter
                      "batch_size":100,
-                     "mem_size":500,
-                     "win_priority":50,
+                     "mem_size":1000,
+                     "win_priority":5,
                      "lose_priority":5,
                      "sur_priority":1,
-                     "kernel_initializer":"zeros",
+                     "kernel_initializer":"random_uniform",
                      "bias_initializer":"ones",
                      "frames_used":4,
-                     "convolutional_sizes": ((100, (3, 3)),
-                                             (50, (3, 3))),
-                     "dense_sizes":(200, 100),
+                     "convolutional_sizes": ((25, (3, 3)),),
+                     "dense_sizes":(100, 50),
                      "pool_shape":(0, 0),  # not working as of now
-                     "dropout":0.1,
-                     "learning_rate":0.05,
+                     "dropout":0.25,
+                     "learning_rate":0.1,
                      }
                         
     
     
-    game = Snake(player_params["frames_used"])
+    game = Catch(player_params["frames_used"])
     player = Player(game, **player_params)
                  
 #     Uncomment this to play manually
 #    play_manually(game)
     
-    train(player, game, 1000)
+    train(player, game, 500)
     test(player, game)
     
     record_player(player, 'snakegame.gif')
