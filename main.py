@@ -6,13 +6,16 @@ Created on Fri Aug 25 12:13:04 2017
 @author: carles
 """
 
-import numpy as n
+import numpy as np
+import imageio
+from PIL import Image, ImageFont, ImageDraw
+
 from player import Player
 from games import Snake as Snake
 from games import Catch as Catch
 
 
-def play_manually(self, game):
+def play_manually(game):
     while not game.gameover:
         game.draw_screen()
         print("Choose action:", end="")
@@ -141,26 +144,28 @@ if __name__ == "__main__":
                      "lose_priority":5,
                      "sur_priority":1,
                      "kernel_initializer":"zeros",
-                     "bias_initializer":"random_uniform",
+                     "bias_initializer":"ones",
                      "frames_used":4,
                      "convolutional_sizes": ((32, (3, 3)),
                                              (64, (3, 3))),
-                     "dense_sizes":(256, 128),
-                     "pool_shape":(0, 0),
-                     "dropout":0.25,
-                     "learning_rate":0.05,
+                     "dense_sizes":(256, 64),
+                     "pool_shape":(0, 0),  # not working as of now
+                     "dropout":0.1,
+                     "learning_rate":0.005,
                      }
-                                                 
-#     Uncomment this to play manually
-    play_manually(game)
+                        
+    
     
     game = Snake(player_params["frames_used"])
     player = Player(game, **player_params)
                  
+#     Uncomment this to play manually
+#    play_manually(game)
+    
     train(player, game)
     test(player, game)
     
-    record_player(player, 'catchgame.gif')
+    record_player(player, 'snakegame.gif')
     
     player.save('snakeplayer')
         

@@ -8,6 +8,7 @@ Created on Fri Sep  1 10:21:48 2017
 import random
 import numpy as np
 
+
 from keras.models import Sequential
 from keras.layers.core import Dense
 from keras.layers.convolutional import Convolution2D as Conv2D
@@ -100,17 +101,13 @@ class Player():
             model.add(Dense(h, activation='relu'))
         model.add(Dense(len(self.game.get_actions())))
         
-#        self.model.compile("adam", "mse")
         model.compile(sgd(lr=self.learning_rate), "mse")
         
         return model
             
-##    # Another model with convolutional layers. Comment or uncomment at need.
+    # Another model with convolutional layers. Comment or uncomment at need.
     def build_model(self):
-        
         self.input_shape = (*self.game.grid_shape, self.frames_used)
-#        fnum = (self.game.grid_height - fshape[0] + 1 
-#                )*(self.game.grid_width - fshape[1] + 1)
         model = Sequential()
         for s in self.convolutional_sizes:
             model.add(BatchNormalization(input_shape=self.input_shape))    
