@@ -41,7 +41,6 @@ class Game:
         self.last_frames = []
         [self.remember_frame(self.grid) for i in range(FRAMES_USED)]
         
-        self.extra_info = 0
         
     def remember_frame(self, state):
         self.last_frames.append(state)
@@ -109,7 +108,6 @@ class Snake(Game):
     def __init__(self):
         Game.__init__(self, 5, 5)
         # initialize the snake's direction
-#        self.snake_dir = 0 
         self.snake_dir = random.randint(1,4)
         # initialize head and fruit (so that get_free_cell() works)
         self.head_pos =  [-1, -1]
@@ -121,18 +119,9 @@ class Snake(Game):
         self.set_tile(self.head_pos, PLAYER) # paint the head
         self.set_tile(self.fruit_pos, FRUIT) # paint the fruit
         
-        self.extra_info = 0
-        
         self.lose_r = -5
         self.survive_r = 1
         self.win_r = 5
-
-#    def get_state(self):
-#        """
-#        Returns the grid AND the direction of the snake.
-#        """
-##        return np.append(self.snake_dir, self.grid)
-#        return self.grid
     
     def get_actions(self):
         return [0, 1, 2, 3, 4] # keep going, move up, right, down, left
@@ -308,7 +297,7 @@ class Player():
         
     def build_model(self):
         # Build deep neural network
-        self.input_shape = (self.game.grid_size + self.game.extra_info,)
+        self.input_shape = (self.game.grid_size)
         
         model = Sequential()
         model.add(Dense(DENSE_SIZES[0], activation="relu", 
