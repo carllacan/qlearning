@@ -1,3 +1,3 @@
-from game import Game
-from snake import Snake
-from catch import Catch
+from games.game import Game
+from games.snake import Snake
+from games.catch import Catch

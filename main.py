@@ -11,7 +11,16 @@ from player import Player
 from games import Snake as Snake
 from games import Catch as Catch
 
-    
+
+def play_manually(self, game):
+    while not game.gameover:
+        game.draw_screen()
+        print("Choose action:", end="")
+        a = input()
+        r = game.transition(int(a))
+        print("Reward:", r)
+        print("")
+
 def train(player, game):
     
     # Training
@@ -115,47 +124,38 @@ def record_player(player, fname):
         
 
 if __name__ == "__main__":
+    
     VERBOSE_TRAIN = True
-    
-    PLAYER = 1
-    FRUIT = 1
-    
+        
     BATCH_SIZE = 100
     EPOCHS = 10000
     
-    MAX_EPSILON = 0.1
-    EPOCHS_TO_MAX_EPSILON = 2000
-    MAX_DISCOUNT = 0.95
-    EPOCHS_TO_MAX_DISCOUNT = 1000
-    KDT = 1.1 # advantage learning parameter k/dt
-    
-    # Experience replay (prioritized)
-    MEM_SIZE = 500
-    WIN_PRIORITY = 5
-    LOSE_PRIORITY = 5
-    SUR_PRIORITY = 1
-    
-    INITIALIZER = 'random_uniform'
-    FRAMES_USED = 4
-    CONV_SIZES = ((32, (3, 3)),
-                  (64, (3, 3)))
-    DENSE_SIZES = (256, 128)
-    POOL_SHAPE = (0, 0)
-    DROPOUT = 0.25
-    LEARNING_RATE = 0.05
-    
+    player_params = {"max_epsilon": 0.1,
+                     "epochs_to_max_epsilon": 2000,
+                     "max_discount":0.95,
+                     "epochs_to_max_discount":1000,
+                     "kdt":1.0,  # advantage learning k/dt parameter
+                     "batch_size":100,
+                     "mem_size":500,
+                     "win_priority":5,
+                     "lose_priority":5,
+                     "sur_priority":1,
+                     "kernel_initializer":"zeros",
+                     "bias_initializer":"random_uniform",
+                     "frames_used":4,
+                     "convolutional_sizes": ((32, (3, 3)),
+                                             (64, (3, 3))),
+                     "dense_sizes":(256, 128),
+                     "pool_shape":(0, 0),
+                     "dropout":0.25,
+                     "learning_rate":0.05,
+                     }
+                                                 
 #     Uncomment this to play manually
-#    game = Catch()
-#    while not game.gameover:
-#        game.draw_screen()
-#        print("Choose action:", end="")
-#        a = input()
-#        r = game.transition(int(a))
-#        print("Reward:", r)
-#        print("")
-#                
-    game = Snake()
-    player = Player(game)
+    play_manually(game)
+    
+    game = Snake(player_params["frames_used"])
+    player = Player(game, **player_params)
                  
     train(player, game)
     test(player, game)

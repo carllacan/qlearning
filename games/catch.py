@@ -6,13 +6,13 @@ Created on Fri Sep  1 10:18:38 2017
 @author: carles
 """
 
-from game import Game
+from games import Game
 import random
 
 class Catch(Game):
     
-    def __init__(self):
-        Game.__init__(self, 10, 10)
+    def __init__(self, frames_used):
+        Game.__init__(self, 10, 10, frames_used)
         self.player_width = 3
         
 #        self.player_pos = self.grid_width // 2 - self.player_width // 2

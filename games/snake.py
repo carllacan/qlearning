@@ -5,13 +5,13 @@ Created on Fri Sep  1 10:18:38 2017
 
 @author: carles
 """
-from game import Game
+from games import Game
 import random
 
 class Snake(Game):
     
-    def __init__(self):
-        Game.__init__(self, 5, 5)
+    def __init__(self, frames_used):
+        Game.__init__(self, 5, 5, frames_used)
         # initialize the snake's direction
         self.snake_dir = random.randint(1,4)
         # initialize head and fruit (so that get_free_cell() works)
@@ -21,12 +21,13 @@ class Snake(Game):
         self.head_pos = self.get_free_cell()
         self.fruit_pos = self.get_free_cell()
         # paint them
-        self.set_tile(self.head_pos, PLAYER) # paint the head
-        self.set_tile(self.fruit_pos, FRUIT) # paint the fruit
+        self.set_tile(self.head_pos, 1) # paint the head
+        self.set_tile(self.fruit_pos, 1) # paint the fruit
         
         self.lose_r = -5
         self.survive_r = -1
-        self.win_r = 515
+        self.win_r = 15
+        
     def get_actions(self):
 #        return [0, 1, 2, 3, 4] # keep going, move up, right, down, left
         return [0, 1, 2] # keep going, turn left, turn right
@@ -84,12 +85,12 @@ class Snake(Game):
                 self.head_pos[1] -= 1
                 
             # replace head
-            self.set_tile(self.head_pos, PLAYER)
+            self.set_tile(self.head_pos, 1)
             
             # if the fruit was there
             if self.fruit_pos == self.head_pos:
                 self.fruit_pos = self.get_free_cell() # reposition fruit
-                self.set_tile(self.fruit_pos, FRUIT) # paint fruit
+                self.set_tile(self.fruit_pos, 1) # paint fruit
                 reward = self.win_r # reward the player
             
         return reward

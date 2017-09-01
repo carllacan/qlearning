@@ -7,16 +7,16 @@ Created on Fri Sep  1 10:18:38 2017
 """
 
 import numpy as np
-import random
 
 class Game:
     
-    def __init__(self, grid_height, grid_width):
+    def __init__(self, grid_height, grid_width, frames_used):
         """
         To make printing easier the coordinates refer to
             distance from the top border
             distance from the left border
         """
+        self.frames_used = frames_used # do away with this
         self.grid_height = grid_height
         self.grid_width = grid_width
         self.grid_shape = self.grid_height, self.grid_width
@@ -25,12 +25,12 @@ class Game:
         self.gameover = False
         
         self.last_frames = []
-        [self.remember_frame(self.grid) for i in range(FRAMES_USED)]
+        [self.remember_frame(self.grid) for i in range(frames_used)]
         
         
     def remember_frame(self, state):
         self.last_frames.append(state)
-        if len(self.last_frames) > FRAMES_USED:
+        if len(self.last_frames) > self.frames_used:
             self.last_frames.pop(0)
             
     def transition(self, action):
@@ -85,4 +85,4 @@ class Game:
         
         
     def reset(self):
-        self.__init__()
+        self.__init__(self.frames_used)

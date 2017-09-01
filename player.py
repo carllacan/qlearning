@@ -6,16 +6,13 @@ Created on Fri Sep  1 10:21:48 2017
 @author: carles
 """
 import random
-
-import imageio
-from PIL import Image, ImageFont, ImageDraw
+import numpy as np
 
 from keras.models import Sequential
 from keras.layers.core import Dense
 from keras.layers.convolutional import Convolution2D as Conv2D
 from keras.layers import MaxPooling2D
 from keras.layers import BatchNormalization
-from keras.layers import Activation
 from keras.layers import Flatten
 from keras.layers import Dropout
 #from keras.constraints import maxnorm
@@ -24,31 +21,63 @@ from keras.optimizers import sgd
 
 class Player():
     
-    def __init__(self, game):
+    def __init__(self, game, 
+                 max_epsilon, 
+                 epochs_to_max_epsilon,
+                 max_discount,
+                 epochs_to_max_discount,
+                 kdt,
+                 batch_size,
+                 mem_size,
+                 win_priority,
+                 lose_priority,
+                 sur_priority,
+                 kernel_initializer,
+                 bias_initializer,
+                 frames_used,
+                 convolutional_sizes,
+                 dense_sizes,
+                 pool_shape,
+                 dropout,
+                 learning_rate
+                 ):
+        
         # Exploration rate (aka epsilon): determines the probability that the
         # player will take a random action. This avoids the dilemma between
         # exploration and exploitation (should I keep choosing safe actions
         # or do I try to maximize my scores?)
-        self.max_epsilon = MAX_EPSILON # 0.1
+        self.max_epsilon = max_epsilon # 0.1
         self.epsilon = 0.0
         self.epsilon_growth = (self.max_epsilon - self.epsilon
-                               )/EPOCHS_TO_MAX_EPSILON #/epoch
+                               )/epochs_to_max_epsilon #/epoch
         
         # Discount rate: determines how much future rewards are taken into
         # account when training. Zero will make the player myopic (prefer
         # short-term rewards) and one will take the future rewards for
         # exact values (so unless deterministic game make discount < 1)
-        self.max_discount = MAX_DISCOUNT #0.9
+        self.max_discount = max_discount #0.9
         self.discount = 0.0
         self.discount_growth = (self.max_discount - self.discount
-                                )/EPOCHS_TO_MAX_DISCOUNT #/epoch
+                                )/epochs_to_max_discount #/epoch
         
         # Advantage learning parameter. It is actually k/dt, with dt being
         # the steptime of a frame. Not sure how to set it.
-        self.kdt = KDT
+        self.kdt = kdt
         
-        self.batch_size = BATCH_SIZE #30
-        self.max_mem = MEM_SIZE
+        self.batch_size = batch_size 
+        self.max_mem = mem_size
+        
+        self.win_priority = win_priority
+        self.lose_priority = lose_priority
+        self.sur_priority = sur_priority
+        self.kernel_initializer = kernel_initializer
+        self.bias_initializer = bias_initializer
+        self.frames_used = frames_used
+        self.convolutional_sizes = convolutional_sizes
+        self.dense_sizes = dense_sizes
+        self.pool_shape = pool_shape
+        self.dropout = dropout
+        self.learning_rate = learning_rate
         
         self.memory = [] 
         self.game = game
@@ -62,45 +91,45 @@ class Player():
         self.input_shape = (self.game.grid_size)
         
         model = Sequential()
-        model.add(Dense(DENSE_SIZES[0], activation="relu", 
+        model.add(Dense(self.dense_sizes[0], activation="relu", 
                              input_shape=self.input_shape,
                              kernel_initializer='random_uniform',
                              bias_initializer='random_uniform'))
-        model.add(Dropout(DROPOUT))
-        for h in DENSE_SIZES:
+        model.add(Dropout(self.dropout))
+        for h in self.dense_sizes:
             model.add(Dense(h, activation='relu'))
         model.add(Dense(len(self.game.get_actions())))
         
 #        self.model.compile("adam", "mse")
-        model.compile(sgd(lr=LEARNING_RATE), "mse")
+        model.compile(sgd(lr=self.learning_rate), "mse")
         
         return model
             
 ##    # Another model with convolutional layers. Comment or uncomment at need.
     def build_model(self):
         
-        self.input_shape = (*self.game.grid_shape, FRAMES_USED)
+        self.input_shape = (*self.game.grid_shape, self.frames_used)
 #        fnum = (self.game.grid_height - fshape[0] + 1 
 #                )*(self.game.grid_width - fshape[1] + 1)
         model = Sequential()
-        for s in CONV_SIZES:
+        for s in self.convolutional_sizes:
             model.add(BatchNormalization(input_shape=self.input_shape))    
-            model.add(Dropout(DROPOUT))
+            model.add(Dropout(self.dropout))
             model.add(Conv2D(s[0], s[1], activation="relu", 
                                  padding='valid',
 #                                 subsample=(2, 2), 
 #                                 dim_ordering='th',
 #                                 input_shape=self.input_shape,
-                                 kernel_initializer=INITIALIZER,
-                                 bias_initializer=INITIALIZER))
-        if POOL_SHAPE != (0, 0):
-            model.add(MaxPooling2D(pool_size=POOL_SHAPE))
+                                 kernel_initializer=self.kernel_initializer,
+                                 bias_initializer=self.bias_initializer))
+        if self.pool_shape != (0, 0):
+            model.add(MaxPooling2D(pool_size=self.pool_shape))
         model.add(Flatten())
-        for s in DENSE_SIZES:
+        for s in self.dense_sizes:
             model.add(BatchNormalization())
             model.add(Dense(s, activation='relu'))
         model.add(Dense(len(self.game.get_actions())))
-        model.compile(sgd(lr=LEARNING_RATE), "mse")
+        model.compile(sgd(lr=self.learning_rate), "mse")
         
         return model
     
@@ -137,11 +166,11 @@ class Player():
                             self.shape_grid(state_final), gameover)
         # Prioritized Experience Replay
         if reward == self.game.win_r:
-            priority = WIN_PRIORITY
+            priority = self.win_priority
         elif reward == self.game.lose_r:
-            priority = LOSE_PRIORITY
+            priority = self.lose_priority
         else:
-            priority = SUR_PRIORITY
+            priority = self.sur_priority
         for i in range(priority):
             self.memory.append(experience)
             if len(self.memory) > self.max_mem:
