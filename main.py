@@ -124,7 +124,8 @@ class Snake(Game):
         self.win_r = 5
     
     def get_actions(self):
-        return [0, 1, 2, 3, 4] # keep going, move up, right, down, left
+#        return [0, 1, 2, 3, 4] # keep going, move up, right, down, left
+        return [0, 1, 2] # keep going, turn left, turn right
     
     def tile_symbols(self, tile):
 #        return ("░", "▓", "█")[tile]
@@ -142,15 +143,20 @@ class Snake(Game):
         self.remember_frame(self.grid)
         
         reward = self.survive_r
-        # Do nothing if the snake is moving in the opposite direction
-        if action == 1 and self.snake_dir != 3:
-            self.snake_dir = 1
-        if action == 2 and self.snake_dir != 4:
-            self.snake_dir = 2
-        if action == 3 and self.snake_dir != 1:
-            self.snake_dir = 3
-        if action == 4 and self.snake_dir != 2:
-            self.snake_dir = 4
+#        # Do nothing if the snake is moving in the opposite direction
+#        if action == 1 and self.snake_dir != 3:
+#            self.snake_dir = 1
+#        if action == 2 and self.snake_dir != 4:
+#            self.snake_dir = 2
+#        if action == 3 and self.snake_dir != 1:
+#            self.snake_dir = 3
+#        if action == 4 and self.snake_dir != 2:
+#            self.snake_dir = 4
+        
+        if action == 1: # turn left (counterclockwise)
+            self.snake_dir = (0, 4, 1, 2, 3)[self.snake_dir]
+        if action == 2: # turn right (clockwise)
+            self.snake_dir = (0, 2, 3, 4, 1)[self.snake_dir]
             
         # Detect collision with borders
         if (self.snake_dir == 1 and self.head_pos[0] == 0 or
