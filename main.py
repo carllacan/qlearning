@@ -24,14 +24,14 @@ def play_manually(game):
         print("Reward:", r)
         print("")
 
-def train(player, game):
+def train(player, game, epochs, verbose = True):
     
     # Training
     print("\n=== Training ===\n")
     
     longest_run = 0
     high_score = 0
-    for epoch in range(0, EPOCHS):
+    for epoch in range(0, epochs):
         game.reset()
         length = 0
         score = 0 
@@ -49,9 +49,9 @@ def train(player, game):
             player.memorize(s, a, r, sf, game.gameover)
         loss = player.train()
             
-        if VERBOSE_TRAIN:
+        if verbose:
             print("Epoch {}/{}: \t {} turns. \t Score {}.\t Loss: {:.4f}".format(
-                epoch, EPOCHS, length, score, loss))
+                epoch, epochs, length, score, loss))
         longest_run = max(longest_run, length)
         high_score = max(high_score, score)
             
@@ -128,30 +128,26 @@ def record_player(player, fname):
 
 if __name__ == "__main__":
     
-    VERBOSE_TRAIN = True
-        
-    BATCH_SIZE = 100
-    EPOCHS = 10000
     
     player_params = {"max_epsilon": 0.1,
                      "epochs_to_max_epsilon": 2000,
                      "max_discount":0.95,
-                     "epochs_to_max_discount":1000,
+                     "epochs_to_max_discount":500,
                      "kdt":1.0,  # advantage learning k/dt parameter
                      "batch_size":100,
                      "mem_size":500,
-                     "win_priority":5,
+                     "win_priority":50,
                      "lose_priority":5,
                      "sur_priority":1,
                      "kernel_initializer":"zeros",
                      "bias_initializer":"ones",
                      "frames_used":4,
-                     "convolutional_sizes": ((32, (3, 3)),
-                                             (64, (3, 3))),
-                     "dense_sizes":(256, 64),
+                     "convolutional_sizes": ((100, (3, 3)),
+                                             (50, (3, 3))),
+                     "dense_sizes":(200, 100),
                      "pool_shape":(0, 0),  # not working as of now
                      "dropout":0.1,
-                     "learning_rate":0.005,
+                     "learning_rate":0.05,
                      }
                         
     
@@ -162,7 +158,7 @@ if __name__ == "__main__":
 #     Uncomment this to play manually
 #    play_manually(game)
     
-    train(player, game)
+    train(player, game, 1000)
     test(player, game)
     
     record_player(player, 'snakegame.gif')
