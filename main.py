@@ -102,8 +102,6 @@ def record_player(player, fname):
     imgs = []
     while not game.gameover and length < 1000:
         s = game.get_state()[-1]
-        a = player.get_action(s)
-        r = game.transition(a)
         
         size = game.grid_height*tilesize, game.grid_width*tilesize
         img = Image.new('RGB', size, 'white')
@@ -121,6 +119,8 @@ def record_player(player, fname):
         img_array = np.fromstring(img.tobytes(), dtype=np.uint8)
         imgs.append(img_array.reshape((*size, 3)))
         
+        a = player.get_action(s)
+        r = game.transition(a)
         length += 1
         score += 1 if r == game.win_r else 0
         
@@ -132,28 +132,29 @@ if __name__ == "__main__":
     
     
     player_params = {"max_epsilon": 0.1,
-                     "epochs_to_max_epsilon": 500,
+                     "epochs_to_max_epsilon": 200,
                      "max_discount":0.95,
-                     "epochs_to_max_discount":500,
+                     "epochs_to_max_discount":200,
                      "kdt":1.0,  # advantage learning k/dt parameter
-                     "batch_size":100,
+                     "batch_size":50,
                      "mem_size":1000,
                      "win_priority":5,
                      "lose_priority":5,
                      "sur_priority":1,
                      "kernel_initializer":"random_uniform",
                      "bias_initializer":"ones",
-                     "frames_used":4,
-                     "convolutional_sizes": ((25, (3, 3)),),
-                     "dense_sizes":(100, 50),
+                     "frames_used":3,
+                     "convolutional_sizes": ((250, (3, 3)),
+                                             (200, (2, 2))),
+                     "dense_sizes":( 100, 80),
                      "pool_shape":(0, 0),  # not working as of now
-                     "dropout":0.25,
-                     "learning_rate":0.1,
+                     "dropout":0.1,
+                     "learning_rate":0.05,
                      }
                         
     
     
-    game = Catch(player_params["frames_used"])
+    game = Snake(player_params["frames_used"])
     player = Player(game, **player_params)
                  
 #     Uncomment this to play manually
